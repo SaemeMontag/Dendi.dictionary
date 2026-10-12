@@ -177,3 +177,22 @@ footer { border-top: 1px solid var(--line); padding-block: 18px 28px; color: var
   .chk span.long { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+/* варианты и полные примеры */
+.variant { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.vh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.vl { font-family: var(--f-display); font-weight: 700; color: var(--accent); font-size: 1.05rem; min-width: 1.6rem; }
+.vf { font-family: var(--f-dendi); font-weight: 700; font-size: 1.5rem; line-height: 1.2; overflow-wrap: anywhere; }
+.exs { display: flex; flex-direction: column; gap: 12px; }
+.exc { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.exh { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; font-size: .88rem; color: var(--muted); }
+.pidtag { font-family: var(--f-mono); font-size: .8rem; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+.dsent { font-family: var(--f-dendi); font-size: 1.25rem; line-height: 1.4; overflow-wrap: anywhere; }
+.exf { margin: 0; display: grid; grid-template-columns: 11rem 1fr; gap: 6px 14px; }
+.exf dt { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 3px; }
+.exf dd { margin: 0; min-width: 0; }
+.refs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .9rem; }
+.refs li { white-space: nowrap; }
+a.pid { font-family: var(--f-mono); font-size: .88em; }
+.focus .exc { outline: 2px solid var(--accent); }
+#view [id^="p"] { scroll-margin-top: 140px; }
+@media (max-width: 560px) { .exf { grid-template-columns: 1fr; gap: 2px; } .exf dd { margin-bottom: 6px; } .refs li { white-space: normal; } }

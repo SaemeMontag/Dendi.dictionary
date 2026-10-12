@@ -1,30 +1,22 @@
-"""Сборка сайта «Словарь денди» из текста Google-документа.
+"""Сборка сайта «Словарь денди» из Google-документа.
 
 Использование:
-  python3 build.py <документ.txt или JSON Drive> <страница.html> <выход.html> [--site <папка> --base <URL>]
+  python3 build.py <документ> <страница.html> <выход.html> [--site <папка> --base <URL>]
 
+<документ> — выгрузка Google-документа: JSON-результат Google Drive (download_file_content)
+  или файл .html/.txt. Лучше HTML (exportMimeType "text/html"): из него берутся ссылки
+  на страницы источников. Из текстовой выгрузки сайт тоже собирается, но без этих ссылок.
 <страница.html> — страница-фрагмент для claude.ai (данные в ней заменяются) или шаблон с __DATA__.
---site: дополнительно собрать полноценный сайт для GitHub Pages в <папке>: index.html с заголовком
-для поисковиков, отдельные страницы слов w/<номер>.html, sitemap.xml, robots.txt, assets/site.css.
+--site: дополнительно собрать полноценный сайт для GitHub Pages в <папке>.
 
-Разделы документа «История обновлений» и «Постоянные правила словаря» на сайт не попадают.
+На сайт не попадает «Редакторский раздел» (от его заголовка до «Введения для читателя»).
 
 Код выхода: 0 — собрано (STATUS CHANGED или UNCHANGED); 2 — документ не прошёл проверки
 (STATUS FAILED), ничего не записано, публиковать нельзя.
 """
-import re, json, sys, os, base64
+import re, json, sys, os, base64, html as htmlmod, urllib.parse, datetime
 
 # ---------- ввод ----------
-
-def load_text(path):
-    raw = open(path, encoding='utf-8').read()
-    if raw.lstrip().startswith('{'):
-        d = json.loads(raw); c = d.get('content', '')
-        try:
-            return base64.b64decode(c, validate=True).decode('utf-8')
-        except Exception:
-            return c
-    return raw
 
 args = sys.argv[1:]
 site_dir = base_url = None
@@ -34,274 +26,255 @@ if '--base' in args:
     i = args.index('--base'); base_url = args[i + 1].rstrip('/') + '/'; del args[i:i + 2]
 src_path, page_path, out = args[0], args[1], args[2]
 
-L = [l.rstrip('\r').replace('﻿', '').strip() for l in load_text(src_path).split('\n')]
-problems = []
 
 def fail_now(msg):
     print('STATUS FAILED'); print(' -', msg); sys.exit(2)
 
-def find(pred, start=0, end=None, name=''):
-    for i in range(start, len(L) if end is None else end):
+
+def load_raw(path):
+    raw = open(path, encoding='utf-8').read()
+    if raw.lstrip().startswith('{'):
+        d = json.loads(raw); c = d.get('content', '')
+        try:
+            return base64.b64decode(c, validate=True).decode('utf-8')
+        except Exception:
+            return c
+    return raw
+
+
+def clean_url(u):
+    u = htmlmod.unescape(u)
+    m = re.match(r'https?://www\.google\.com/url\?q=([^&]+)', u)
+    return urllib.parse.unquote(m[1]) if m else u
+
+
+def strip_tags(s):
+    return htmlmod.unescape(re.sub(r'<[^>]+>', '', s)).replace('\xa0', ' ')
+
+
+raw = load_raw(src_path)
+LINES = []          # [(текст, ссылка всей строки или '')]
+if re.search(r'<(p|h[1-6])\b', raw[:200000], re.I):
+    body = re.sub(r'(?is)<(style|script|head)\b.*?</\1>', '', raw)
+    for _, inner in re.findall(r'(?is)<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>', body):
+        text = re.sub(r'\s+', ' ', strip_tags(inner)).strip()
+        links = [(re.sub(r'\s+', ' ', strip_tags(t)).strip(), clean_url(h))
+                 for h, t in re.findall(r'(?is)<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', inner)]
+        url = next((u for t, u in links if t == text and u.startswith('http')), '')
+        LINES.append((text, url))
+else:
+    for l in raw.replace('\r', '').split('\n'):
+        LINES.append((re.sub(r'\s+', ' ', l.replace('﻿', '')).strip(), ''))
+LINES = [(t.replace('﻿', ''), u) for t, u in LINES]
+L = [t for t, _ in LINES]
+URL = [u if 'docs.google.com/document' not in u else '' for _, u in LINES]
+problems = []
+
+
+def find(pred, start=0, name=''):
+    for i in range(start, len(L)):
         if pred(L[i]):
             return i
     fail_now(f'не найден раздел «{name}»')
 
-def eq(t): return lambda l: l == t
-def starts(t): return lambda l: l.startswith(t)
 
-# ---------- шаблоны строк ----------
+# ---------- разделы ----------
 
-BOILER = 'Засвидетельствованная форма в данном контексте. См. пояснение к примеру; грамматические показатели и тон сохранены.'
+i_edit = find(lambda l: l.startswith('Редакторский раздел'), 0, 'Редакторский раздел')
+i_intro = find(lambda l: l == 'Введение для читателя', i_edit, 'Введение для читателя')
+i_gram = find(lambda l: l.startswith('Грамматика:'), i_intro, 'Грамматика')
+i_dict = find(lambda l: l == 'Словарные статьи', i_gram, 'Словарные статьи')
+i_src = find(lambda l: l == 'Источники и границы их использования', i_dict, 'Источники и границы их использования')
+
+meta = {'title': L[0], 'intro': [l for l in L[i_intro + 1:i_gram] if l]}
+
 SRC_CODE = r'(?:NT18|NT95|AL\d+|COV|CAL|CFA|ANT|SM19|T68/72|N78|N89|G88|GYK|H|AT|AZ|RST)'
-SRC_LINE = re.compile(r'^' + SRC_CODE + r'\b[ ,]')
-FORM_RE = re.compile(r'^([^Ѐ-ӿ]+?) — (' + SRC_CODE + r'\b.*)$')
-EX_RE = re.compile(r'^(\d+)\) (.*)$')
+REF_RE = re.compile(r'^' + SRC_CODE + r'\b[ ,:]')
 HEAD_RE = re.compile(r'^(\d+)\. (.+)$')
-SW_RE = re.compile(r'^Сводеш № (\d+) · Примеров: (\d+)(.*)$')
-LETTER_RE = re.compile(r'^[А-ЯЁ]$')
-NEWFMT_RE = re.compile(r'^Форма: (.+?)\. Русский смысл: (.+?)\. (.*)$')
-ADD_HEAD_RE = re.compile(r'^Дополнение: (.+)$')
-ADD_CTX_RE = re.compile(r'^Дополнительный контекст (\d+): (.+?) — «(.+?)»\.? ?(.*)$')
+ROMAN_RE = re.compile(r'^([IVXLC]+)\. (.+)$')
 
-def is_suppl_head(i):
-    return bool(HEAD_RE.match(L[i])) and i + 2 < len(L) and L[i + 2].startswith('Дополнение;')
 
-def is_main_head(i):
-    return bool(HEAD_RE.match(L[i])) and i + 1 < len(L) and bool(SW_RE.match(L[i + 1]))
+def ref(i):
+    return {'t': L[i], 'u': URL[i]}
 
-def example_from(k, text):
-    x = {'k': k, 'text': text, 'gloss': '', 'gloss_type': '', 'source': ''}
-    m = NEWFMT_RE.match(text)
-    if m:
-        x.update(text=m[1], sense=m[2], gloss=m[3], gloss_type='situation')
-    return x
 
-# ---------- шапка документа ----------
-
-meta = {'title': L[0], 'updated': L[1]}
-i_how = find(eq('Как пользоваться'), name='Как пользоваться')
-i_dist = find(eq('Распределение примеров по источникам'), i_how, name='Распределение примеров по источникам')
-meta['howto'] = [l for l in L[i_how + 1:i_dist] if l]
-i_first_letter = find(lambda l: bool(LETTER_RE.match(l)), i_dist, name='первая буква словаря')
-meta['distribution'], meta['distribution_notes'] = [], []
-for l in L[i_dist + 1:i_first_letter]:
-    if not l or l.startswith('Источник — число'):
-        continue
-    m = re.match(r'^(\S+) — (.+?): (\d+) \(([\d,]+)%\)\.$', l)
-    if m: meta['distribution'].append({'code': m[1], 'label': m[2], 'n': int(m[3]), 'pct': m[4]})
-    else: meta['distribution_notes'].append(l)
-
-# ---------- основной словарь ----------
-
-def parse_main(lines, letter):
-    m = HEAD_RE.match(lines[0]); s = SW_RE.match(lines[1])
-    e = {'n': int(m[1]), 'title': m[2], 'letter': letter, 'suppl': False, 'forms': [], 'examples': [],
-         'addenda': [], 'clarifications': [], 'notes': [],
-         'swadesh': int(s[1]), 'count': int(s[2]), 'few': 'меньше пяти' in s[3]}
-    cur_form = cur_ex = cur_add = cur_ctx = None
-    for l in lines[2:]:
-        fm, exm, am, cm = FORM_RE.match(l), EX_RE.match(l), ADD_HEAD_RE.match(l), ADD_CTX_RE.match(l)
-        if cur_ctx is not None and not cur_ctx['source']:
-            if SRC_LINE.match(l): cur_ctx['source'] = l; continue
-            e['notes'].append(l); continue
-        if cur_ex is not None and not cur_ex['source']:
-            if l.startswith('Пояснение: ') and not cur_ex['gloss']:
-                cur_ex['gloss'] = l[len('Пояснение: '):]; cur_ex['gloss_type'] = 'note'; continue
-            if l.startswith('Рус. параллельный контекст: ') and not cur_ex['gloss']:
-                cur_ex['gloss'] = l[len('Рус. параллельный контекст: '):]; cur_ex['gloss_type'] = 'rst'; continue
-            if SRC_LINE.match(l): cur_ex['source'] = l; continue
-            e['notes'].append(l); continue
-        if am:
-            cur_add = {'title': am[1], 'note': '', 'contexts': []}; e['addenda'].append(cur_add)
-            cur_form = cur_ex = cur_ctx = None
-        elif cm and cur_add is not None:
-            cur_ctx = {'k': int(cm[1]), 'text': cm[2], 'sense': cm[3], 'gloss': cm[4], 'gloss_type': 'situation', 'source': ''}
-            cur_add['contexts'].append(cur_ctx)
-        elif cur_add is not None and not cur_add['contexts']:
-            cur_add['note'] = (cur_add['note'] + ' ' + l).strip()
-        elif l.startswith('Уточнение: '):
-            e['clarifications'].append(l[len('Уточнение: '):]); cur_form = None
-        elif cur_add is not None:
-            e['notes'].append(l)
-        elif exm:
-            cur_ex = example_from(int(exm[1]), exm[2]); e['examples'].append(cur_ex); cur_form = None
-        elif cur_ex is not None:
-            e['notes'].append(l)
-        elif fm:
-            cur_form = {'form': fm[1].strip(), 'sources': fm[2].strip(), 'note': ''}; e['forms'].append(cur_form)
-        elif l.startswith('Значение и ограничения. '):
-            e['meaning'] = l[len('Значение и ограничения. '):]; cur_form = None
-        elif l.startswith('Дополнительный указатель. '):
-            e['index_extra'] = l[len('Дополнительный указатель. '):]; cur_form = None
-        elif l.startswith('Научный указатель. '):
-            e['index_sci'] = l[len('Научный указатель. '):]; cur_form = None
-        elif l.startswith('Практическое написание не установлено'):
-            e['unestablished'] = l; cur_form = None
-        elif cur_form is not None:
-            note = l.replace(BOILER, '').strip()
-            if note: cur_form['note'] = (cur_form['note'] + ' ' + note).strip()
-        else:
-            e['notes'].append(l)
-    return e
-
-i_src = find(eq('Источники и степень доступа'), i_first_letter, name='Источники и степень доступа')
-entries, block, letter, blet = [], None, None, None
-for i in range(i_first_letter, i_src):
+# грамматика
+grammar = {'title': L[i_gram], 'intro': [], 'rules': []}
+cur = None
+for i in range(i_gram + 1, i_dict):
     l = L[i]
     if not l: continue
-    if LETTER_RE.match(l):
-        letter = l; continue
-    if is_main_head(i):
-        if block: entries.append(parse_main(block, blet))
-        block, blet = [l], letter; continue
-    if block is not None: block.append(l)
-    else: problems.append(f'строка вне статьи: {l[:60]}')
-if block: entries.append(parse_main(block, blet))
-
-# ---------- источники, «меньше пяти», грамматика ----------
-
-i_few = find(eq('Статьи с менее чем пятью примерами'), i_src, name='Статьи с менее чем пятью примерами')
-src_lines = [l for l in L[i_src + 1:i_few] if l]
-sources_intro, sources = src_lines[0], []
-j = 1
-while j < len(src_lines):
-    code, desc = src_lines[j], src_lines[j + 1] if j + 1 < len(src_lines) else ''
-    url = src_lines[j + 2] if j + 2 < len(src_lines) and src_lines[j + 2].startswith('http') else ''
-    sources.append({'code': code, 'desc': desc, 'url': url}); j += 3 if url else 2
-
-i_ghead = find(eq('Грамматика и дополнительные статьи'), i_few, name='Грамматика и дополнительные статьи')
-few_text = [l for l in L[i_few + 1:i_ghead] if l]
-i_g = find(eq('Вопросы на «да/нет»'), i_ghead, name='Вопросы на «да/нет»')
-i_rules = find(eq('Правила и порядок слов'), i_g, name='Правила и порядок слов')
-i_exs = find(eq('Примеры с разбором по словам'), i_rules, name='Примеры с разбором по словам')
-i_addl = find(eq('Дополнительные словарные статьи'), i_exs, name='Дополнительные словарные статьи')
-
-g_intro = [l for l in L[i_g + 1:i_rules] if l]
-grammar = {'subtitle': g_intro[0], 'date': g_intro[1], 'intro': [], 'correction': None, 'rules': [], 'examples': [], 'sources': []}
-rest = g_intro[2:]
-if 'Исправление прежнего объяснения' in rest:
-    p = rest.index('Исправление прежнего объяснения')
-    grammar['intro'] = rest[:p]; grammar['correction'] = ' '.join(rest[p + 1:])
-else:
-    grammar['intro'] = rest
-rl = [l for l in L[i_rules + 1:i_exs] if l]
-for a in range(0, len(rl) - 1, 2):
-    t = re.match(r'^(\d+)\. (.+)$', rl[a])
-    if not t: problems.append(f'правило грамматики не распознано: {rl[a][:60]}'); continue
-    grammar['rules'].append({'n': int(t[1]), 'title': t[2], 'text': rl[a + 1]})
-el = [l for l in L[i_exs + 1:i_addl] if l]
-a = 0
-while a < len(el):
-    m = re.match(r'^([БДA-ZА-Я]\d+)\. (.+)$', el[a])
-    if not m or a + 4 >= len(el):
-        problems.append(f'пример разбора не распознан: {el[a][:60]}'); a += 1; continue
-    grammar['examples'].append({'id': m[1], 'dendi': m[2], 'ru': el[a + 1], 'comment': el[a + 2], 'parse': el[a + 3], 'source': el[a + 4]})
-    a += 5
-
-# ---------- дополнительные статьи и пояснительные разделы после грамматики ----------
-
-KNOWN_SECTION = lambda l: l in ('Источники и проверка', 'Проверка и дальнейшее пополнение') or l.startswith('Новые слова из обсуждения')
-
-def parse_suppl(lines):
-    m = HEAD_RE.match(lines[0])
-    fm = re.match(r'^(.+?) — (.+)$', lines[1])
-    cm = re.search(r'Контекстов: (\d+)', lines[2])
-    e = {'n': int(m[1]), 'title': m[2], 'suppl': True, 'letter': m[2][0].upper(),
-         'forms': [{'form': fm[1] if fm else lines[1], 'sources': '', 'note': fm[2] if fm else ''}],
-         'examples': [], 'addenda': [], 'clarifications': [], 'notes': [],
-         'count': int(cm[1]) if cm else -1, 'label': lines[2],
-         'few': 'меньше пяти' in lines[2]}
-    cur = None
-    for l in lines[3:]:
-        exm = EX_RE.match(l)
-        if cur is not None and not cur['source']:
-            if SRC_LINE.match(l): cur['source'] = l
-            else: e['notes'].append(l)
-        elif exm:
-            cur = example_from(int(exm[1]), exm[2])
-            if not cur['gloss_type']:      # старый формат: только пояснение
-                cur.update(gloss=cur['text'], text='', gloss_type='note')
-            e['examples'].append(cur)
-        elif l.startswith('Значение и ограничения. ') and not e['examples']:
-            e['meaning'] = l[len('Значение и ограничения. '):]
-        else:
-            e['notes'].append(l)
-    return e
-
-suppl, sections, block, cur_sec = [], [], None, None
-for i in range(i_addl + 1, len(L)):
-    l = L[i]
-    if not l: continue
-    if is_suppl_head(i):
-        if block: suppl.append(parse_suppl(block))
-        block = [l]; cur_sec = None; continue
-    if block is not None:
-        last = block[-1]
-        in_body = (len(block) < 3 or l.startswith('Значение и ограничения. ') or EX_RE.match(l)
-                   or (SRC_LINE.match(l) and EX_RE.match(last)))
-        if in_body:
-            block.append(l); continue
-        suppl.append(parse_suppl(block)); block = None
-    if KNOWN_SECTION(l) or cur_sec is None:
-        if KNOWN_SECTION(l):
-            cur_sec = {'title': l, 'paras': []}
-        else:
-            cur_sec = {'title': '', 'paras': [l]}
-        sections.append(cur_sec)
+    m = HEAD_RE.match(l)
+    if m and not REF_RE.match(l):
+        cur = {'n': int(m[1]), 'title': m[2], 'paras': [], 'refs': []}; grammar['rules'].append(cur)
+    elif cur is None:
+        grammar['intro'].append(l)
+    elif REF_RE.match(l):
+        cur['refs'].append(ref(i))
     else:
-        cur_sec['paras'].append(l)
-if block: suppl.append(parse_suppl(block))
-for s in sections:
-    if s['title'] == 'Источники и проверка':
-        grammar['sources'] = s['paras']
-grammar['notes'] = [s for s in sections if s['title'] != 'Источники и проверка']
+        cur['paras'].append(l)
 
-data = {'meta': meta, 'entries': entries + suppl, 'sources_intro': sources_intro,
-        'sources': sources, 'few': few_text, 'grammar': grammar}
+# ---------- словарные статьи ----------
+
+KIND_EXTRA = 'Дополнительная лексика и грамматика.'
+SW_RE = re.compile(r'^Сводеш № (\d+)$')
+FULLN_RE = re.compile(r'^Полных примеров для этого варианта: (\d+)\.$')
+EX_RE = re.compile(r'^Пример (\d+) \((П\d+)\) — (.+)$')
+EX_FIELDS = [('Денди: ', 'dendi'), ('Источник: ', 'source'), ('Опубликованный русский перевод: ', 'pub'),
+             ('Авторский дословный перевод: ', 'lit'), ('Разбор по словам: ', 'parse'), ('Примечание: ', 'note')]
+
+
+def is_head(i):
+    return bool(HEAD_RE.match(L[i])) and i + 1 < len(L) and (bool(SW_RE.match(L[i + 1])) or L[i + 1] == KIND_EXTRA)
+
+
+def letter_of(title):
+    for ch in title:
+        if ch.isalpha():
+            return ch.upper().replace('Ё', 'Е')
+    return '#'
+
+
+def parse_entry(a, b):
+    m = HEAD_RE.match(L[a])
+    e = {'n': int(m[1]), 'title': m[2], 'letter': letter_of(m[2]), 'variants': [], 'extra_refs': [], 'stray': []}
+    sw = SW_RE.match(L[a + 1])
+    if sw: e.update(kind='swadesh', swadesh=int(sw[1]))
+    else: e['kind'] = 'extra'
+    var = ex = None
+    mode = 'pre'          # pre | var | ex | refs | xrefs
+    for i in range(a + 2, b):
+        l = L[i]
+        if not l: continue
+        if l.startswith('Значение и употребление: ') and 'meaning' not in e:
+            e['meaning'] = l[len('Значение и употребление: '):]; continue
+        if l.startswith('Практическое написание не установлено'):
+            e['unestablished'] = l; continue
+        if l.startswith('Научный указатель: '):
+            e['sci'] = l[len('Научный указатель: '):]; mode = 'post'; continue
+        if l == 'Дополнительные источниковые привязки:':
+            mode = 'xrefs'; continue
+        rm = ROMAN_RE.match(l)
+        if rm and mode not in ('ex',) or (rm and mode == 'ex' and ex and all(ex.get(k) for k in ('dendi', 'source', 'lit'))):
+            var = {'label': rm[1], 'form': rm[2], 'notes': [], 'full': None, 'status': '', 'examples': [], 'refs': []}
+            e['variants'].append(var); ex = None; mode = 'var'; continue
+        if mode == 'pre':
+            if REF_RE.match(l) or EX_RE.match(l) or FULLN_RE.match(l):
+                e['stray'].append(l); continue
+            var = {'label': '', 'form': l, 'notes': [], 'full': None, 'status': '', 'examples': [], 'refs': []}
+            e['variants'].append(var); mode = 'var'; continue
+        if mode in ('var', 'ex'):
+            fm = FULLN_RE.match(l)
+            if fm and not var['examples']:
+                var['full'] = int(fm[1]); continue
+            if l.startswith('Полный пример с дословным разбором отсутствует'):
+                var['status'] = l; continue
+            em = EX_RE.match(l)
+            if em:
+                ex = {'k': int(em[1]), 'pid': em[2], 'head': em[3], 'rst': False}
+                var['examples'].append(ex); mode = 'ex'; continue
+            if l == 'Источники формы и дополнительные контексты:':
+                mode = 'refs'; ex = None; continue
+            if mode == 'ex':
+                if l == 'Синодальный перевод — русский параллельный текст':
+                    ex['rst'] = True; continue
+                for pre, key in EX_FIELDS:
+                    if l.startswith(pre) and key not in ex:
+                        ex[key] = l[len(pre):]
+                        if key == 'source': ex['source_url'] = URL[i]
+                        break
+                else:
+                    e['stray'].append(l)
+                continue
+            if not var['examples'] and not var['status'] and var['full'] is None:
+                var['notes'].append(l); continue
+            e['stray'].append(l); continue
+        if mode == 'refs':
+            if REF_RE.match(l): var['refs'].append(ref(i)); continue
+            e['stray'].append(l); continue
+        if mode == 'xrefs':
+            if REF_RE.match(l): e['extra_refs'].append(ref(i)); continue
+            e['stray'].append(l); continue
+        e['stray'].append(l)
+    return e
+
+
+heads = [i for i in range(i_dict + 1, i_src) if is_head(i)]
+for i in range(i_dict + 1, heads[0] if heads else i_src):
+    if L[i]: problems.append(f'строка до первой статьи: {L[i][:70]}')
+entries = [parse_entry(a, b) for a, b in zip(heads, heads[1:] + [i_src])]
+
+# ---------- источники ----------
+
+sources, rst = [], None
+src_lines = [(L[i], URL[i]) for i in range(i_src + 1, len(L)) if L[i]]
+j = 0
+while j < len(src_lines):
+    t, u = src_lines[j]
+    nxt = src_lines[j + 1][0] if j + 1 < len(src_lines) else ''
+    lab = src_lines[j + 2] if j + 2 < len(src_lines) else ('', '')
+    if t.startswith('Опубликованный русский параллельный текст'):
+        rst = {'title': t, 'desc': nxt, 'label': lab[0], 'url': lab[1]}; j += 3; continue
+    if lab[0].startswith('Источник') or (lab[1] and len(lab[0]) < 60):
+        sources.append({'code': t, 'desc': nxt, 'url': lab[1]}); j += 3
+    else:
+        sources.append({'code': t, 'desc': nxt, 'url': ''}); j += 2
+
+data = {'meta': meta, 'grammar': grammar, 'entries': entries, 'sources': sources, 'rst': rst}
 
 # ---------- проверки ----------
 
-main = entries
-if len(main) < 150: problems.append(f'основных статей только {len(main)}')
-if [e['n'] for e in main] != list(range(1, len(main) + 1)): problems.append('нумерация основных статей нарушена')
-bad = [e['n'] for e in main if e['count'] != len(e['examples'])]
-if bad: problems.append(f'число примеров не совпадает с заголовком в статьях {bad}')
-bad = [e['n'] for e in suppl if e['count'] != len(e['examples'])]
-if bad: problems.append(f'число контекстов не совпадает с заголовком в дополнительных статьях {bad}')
-if [e['n'] for e in suppl] != list(range(len(main) + 1, len(main) + 1 + len(suppl))):
-    problems.append('нумерация дополнительных статей нарушена: ' + str([e['n'] for e in suppl]))
-nos = [(e['n'], x['k']) for e in main + suppl for x in e['examples'] if not x['source']]
-nos += [(e['n'], 'доп.' + str(c['k'])) for e in main for a in e['addenda'] for c in a['contexts'] if not c['source']]
-if nos: problems.append(f'примеры без строки источника {nos[:10]}')
-empty = [e['n'] for e in main if not e['forms'] and not e.get('unestablished')]
-if empty: problems.append(f'статьи без форм и без пометки {empty}')
-for e in main + suppl:
-    if e['notes']:
-        problems.append(f'нераспознанные строки в статье {e["n"]} «{e["title"]}»: ' + ' | '.join(x[:70] for x in e['notes'][:3]))
-# все заголовки статей во всём документе должны попасть на сайт
-heads = {int(HEAD_RE.match(L[i])[1]) for i in range(len(L)) if is_main_head(i) or is_suppl_head(i)}
-got = {e['n'] for e in main + suppl}
-if heads != got: problems.append(f'статьи документа не попали на сайт: {sorted(heads - got)[:20]}')
-tm = re.search(r'Всего (\d+) стат', meta['updated'])
-if tm and int(tm[1]) != len(got): problems.append(f'в шапке документа {tm[1]} статей, распознано {len(got)}')
-if not sources: problems.append('раздел источников не распознан')
-if not grammar['rules'] or not grammar['examples']: problems.append('раздел грамматики не распознан')
+if len(entries) < 150: problems.append(f'статей только {len(entries)}')
+if [e['n'] for e in entries] != list(range(1, len(entries) + 1)):
+    problems.append('нумерация статей нарушена: ожидалось 1…N подряд')
+all_heads = [i for i in range(len(L)) if is_head(i)]
+if len(all_heads) != len(entries): problems.append(f'заголовков статей в документе {len(all_heads)}, разобрано {len(entries)}')
+pid_text = {}
+for e in entries:
+    if e['stray']:
+        problems.append(f'нераспознанные строки в статье {e["n"]} «{e["title"]}»: ' + ' | '.join(x[:70] for x in e['stray'][:3]))
+    if not e['variants'] and not e.get('unestablished'):
+        problems.append(f'статья {e["n"]} «{e["title"]}» без форм и без пометки «написание не установлено»')
+    for v in e['variants']:
+        if v['full'] is not None and v['full'] != len(v['examples']):
+            problems.append(f'статья {e["n"]}, вариант {v["form"]}: заявлено полных примеров {v["full"]}, найдено {len(v["examples"])}')
+        for x in v['examples']:
+            miss = [k for k in ('dendi', 'source', 'pub', 'lit', 'parse') if not x.get(k)]
+            if miss: problems.append(f'статья {e["n"]}, пример {x["pid"]}: нет полей {miss}')
+            if x.get('dendi'):
+                if x['pid'] in pid_text and pid_text[x['pid']] != x['dendi']:
+                    problems.append(f'пример {x["pid"]} записан по-разному в разных статьях')
+                pid_text.setdefault(x['pid'], x['dendi'])
+if not sources: problems.append('библиография не распознана')
+if not grammar['rules']: problems.append('раздел грамматики не распознан')
 
-summary = {'entries': len(main), 'suppl': len(suppl), 'examples': sum(len(e['examples']) for e in main),
-           'unestablished': sum(1 for e in main if e.get('unestablished')), 'updated': meta['updated']}
+n_ex = len(pid_text)
+summary = {'entries': len(entries), 'swadesh': sum(e['kind'] == 'swadesh' for e in entries),
+           'extra': sum(e['kind'] == 'extra' for e in entries), 'unique_examples': n_ex,
+           'unestablished': sum(1 for e in entries if e.get('unestablished')),
+           'links': sum(1 for u in URL if u)}
 print('SUMMARY', json.dumps(summary, ensure_ascii=False))
 if problems:
     print('STATUS FAILED')
-    for p in problems: print(' -', p)
+    for p in problems[:40]: print(' -', p)
     sys.exit(2)
 
 # ---------- запись ----------
 
 page = open(page_path, encoding='utf-8').read()
-new_json = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
 m = re.search(r'(<script type="application/json" id="data">)(.*?)(</script>)', page, re.S)
 if not m: fail_now('в странице нет блока данных')
-status = 'UNCHANGED' if m.group(2) == new_json else 'CHANGED'
+old = None
+if m.group(2) != '__DATA__':
+    try:
+        old = json.loads(m.group(2).replace('<\\/', '</'))
+    except Exception:
+        old = None
+old_built = old.pop('built', None) if isinstance(old, dict) else None
+status = 'UNCHANGED' if old == json.loads(json.dumps(data)) else 'CHANGED'
+moscow = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
+data['built'] = old_built if status == 'UNCHANGED' and old_built else moscow.strftime('%d.%m.%Y')
+new_json = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
 page = page[:m.start(2)] + new_json + page[m.end(2):]
 open(out, 'w', encoding='utf-8').write(page)
 if site_dir:

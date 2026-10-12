@@ -2,8 +2,8 @@
 import os, re, json, html, datetime
 
 SITE_NAME = 'Словарь денди'
-SITE_DESC = ('Русско-дендийский словарь: 207 значений списка Сводеша и служебные слова языка денди '
-             '(сонгай северного Бенина) — письменные варианты с источниками, примеры употребления, грамматика.')
+SITE_DESC = ('Русско-дендийский словарь: базовая лексика списка Сводеша и дополнительные слова языка денди '
+             '(сонгай северного Бенина) — варианты письма с источниками, полные примеры с переводом и разбором, грамматика.')
 RESET = (':root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}'
          'body{margin:0}img{max-width:100%}[hidden]{display:none!important}')
 ALPHA = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЭЮЯ'
@@ -23,13 +23,14 @@ def src_ids(sources):
             if re.fullmatch(r'[A-Z0-9]+', c):
                 ids[c] = f'src{i}'
         if s['code'].startswith('T68'): ids['T68/72'] = f'src{i}'
-        if s['code'].startswith('RST'): ids['RST'] = f'src{i}'
+    ids['RST'] = 'srcrst'
     return ids
 
 
 def link_src(text, ids, prefix):
     t = e_(text)
-    return re.sub(r'\b(T68/72|NT18|NT95|AL65|AL64|COV|CAL|CFA|ANT|SM19|N78|N89|G88|GYK|RST|AT|AZ|H)\b',
+    t = re.sub(r'П(\d+)', lambda m: f'<a class="pid" href="{prefix}#p{m[1]}">П{m[1]}</a>', t)
+    return re.sub(r'\b(T68/72|NT18|NT95|AL\d+|COV|CAL|CFA|ANT|SM19|N78|N89|G88|GYK|RST|AT|AZ|H)\b',
                   lambda m: f'<a class="code" href="{prefix}#{ids[m[1]]}">{m[1]}</a>' if m[1] in ids else m[1], t)
 
 
@@ -66,6 +67,7 @@ def header(prefix):
     <nav class="main">
       <a href="{prefix}#home">Словник</a>
       <a href="{prefix}#dendi">Денди → русский</a>
+      <a href="{prefix}#examples">Примеры</a>
       <a href="{prefix}#grammar">Грамматика</a>
       <a href="{prefix}#sources">Источники</a>
       <a href="{prefix}#about">Как пользоваться</a>
@@ -76,67 +78,89 @@ def header(prefix):
 '''
 
 
+def variant_forms(v):
+    return [re.sub(r'\s*\(.*?\)\s*', ' ', f).strip() for f in re.split(r'[;,]\s+', v['form']) if f.strip()]
+
+
 def all_forms(e):
-    out = [ff for f in e['forms'] for ff in re.split(r';\s*', f['form'])]
-    out += [re.sub(r'\s*\(.*?\)\s*', ' ', a['title'].split(' — ')[0]).strip() for a in e.get('addenda', [])]
-    return list(dict.fromkeys(out))
+    return list(dict.fromkeys(f for v in e['variants'] for f in variant_forms(v)))
+
+
+def examples_of(e):
+    return [x for v in e['variants'] for x in v['examples']]
 
 
 def entry_desc(e):
-    if e.get('unestablished'):
+    if not e['variants']:
         return f'{e["title"]} на языке денди: практическое написание пока не установлено. Научные указатели для сверки — в словаре денди.'
-    forms = ', '.join(all_forms(e))
-    n = len(e['examples'])
-    word = 'контекст' if e['suppl'] else 'пример'
-    return f'{e["title"]} на языке денди: {forms}. {n} {plural(n, word, word + "а", word + "ов")} употребления с источниками.'[:300]
+    n = len(examples_of(e))
+    tail = f'{n} {plural(n, "полный пример", "полных примера", "полных примеров")} с переводом и разбором.' if n else 'Варианты письма с источниками.'
+    return f'{e["title"]} на языке денди: {", ".join(all_forms(e))}. {tail}'[:300]
 
 
-def entry_html(e, ids, prev, nxt):
+def ext(text, url):
+    return f'<a href="{e_(url)}" target="_blank" rel="noopener">{e_(text)}</a>' if url else e_(text)
+
+
+def chips(p):
+    items = []
+    for seg in re.split(r';\s*', p.rstrip('.')):
+        m = re.match(r'^(.+?) — (.+)$', seg)
+        if m: items.append([m[1], m[2]])
+        elif items: items[-1][1] += '; ' + seg
+        else: items.append(['', seg])
+    return '<div class="gloss">' + ''.join(
+        '<span>' + (f'<span class="gw" lang="ddn">{e_(w)}</span>' if w else '') + f'<span class="gg">{e_(g)}</span></span>' for w, g in items) + '</div>'
+
+
+def ex_card(x, ids, p, pid_entries, here):
+    others = [o for o in pid_entries.get(x['pid'], []) if o is not here]
+    s = (f'<article class="exc"><div class="exh"><span class="pidtag">Пример {x["k"]} · {e_(x["pid"])}</span>'
+         f'<span class="src">{ext(x["source"], x.get("source_url"))}</span></div>'
+         f'<p class="dsent" lang="ddn">{e_(x["dendi"])}</p><dl class="exf">'
+         f'<dt>Опубликованный перевод{" <span class=\"tag info\">Синодальный</span>" if x.get("rst") else ""}</dt><dd>{e_(x["pub"])}</dd>'
+         f'<dt>Дословный перевод</dt><dd>{e_(x["lit"])}</dd>'
+         f'<dt>Разбор по словам</dt><dd>{chips(x["parse"])}</dd>')
+    if x.get('note'): s += f'<dt>Примечание</dt><dd>{link_src(x["note"], ids, p)}</dd>'
+    s += '</dl>'
+    if others:
+        s += f'<p class="small muted">Этот пример есть и в {plural(len(others), "статье", "статьях", "статьях")}: ' + ', '.join(
+            f'<a href="{o["n"]}.html">{e_(o["title"])}</a>' for o in others) + '</p>'
+    return s + '</article>'
+
+
+def ref_list(refs):
+    return '<ul class="refs">' + ''.join(f'<li>{ext(r["t"], r["u"])}</li>' for r in refs) + '</ul>'
+
+
+def entry_html(e, ids, prev, nxt, pid_entries):
     p = '../'
-    if e['suppl']:
-        tag = f'<span class="tag warn">контекстов: {e["count"]}</span>' if e.get('few') else ''
-        meta = f'<span>№ {e["n"]}</span><span>{e_(e.get("label"))}</span>{tag}'
-    else:
-        tag = ''
-        if e.get('unestablished'): tag = '<span class="tag warn">написание не установлено</span>'
-        elif e.get('few'): tag = f'<span class="tag warn">примеров: {e["count"]}</span>'
-        meta = f'<span>№ {e["n"]}</span><span>Сводеш № {e["swadesh"]}</span><span>Примеров: {e["count"]}</span>{tag}'
-    parts = [f'<div class="crumbs"><a href="{p}">Словник</a><span>›</span><a href="{p}#l{ALPHA.index(e["letter"]) if e["letter"] in ALPHA else 0}">{e_(e["letter"])}</a></div>',
+    n_ex = len(examples_of(e))
+    meta = f'<span>№ {e["n"]}</span>' + (f'<span>Сводеш № {e["swadesh"]}</span>' if e['kind'] == 'swadesh' else '<span class="tag info">дополнительная лексика</span>')
+    if len(e['variants']) > 1:
+        meta += f'<span>{len(e["variants"])} {plural(len(e["variants"]), "вариант", "варианта", "вариантов")}</span>'
+    meta += f'<span>{n_ex} {plural(n_ex, "полный пример", "полных примера", "полных примеров")}</span>' if n_ex else '<span>полных примеров пока нет</span>'
+    li = ALPHA.index(e['letter']) if e['letter'] in ALPHA else 0
+    parts = [f'<div class="crumbs"><a href="{p}">Словник</a><span>›</span><a href="{p}#l{li}">{e_(e["letter"])}</a></div>',
              f'<div class="entry-head"><h1>{e_(e["title"])}</h1><div class="meta">{meta}</div></div>']
     if e.get('unestablished'):
         parts.append(f'<div class="box warn"><span class="label">Написание не установлено</span>{e_(e["unestablished"])}</div>')
-    if e['forms']:
-        lis = ''.join(f'<li><span class="fw" lang="ddn">{e_(f["form"])}</span><span class="fs">{link_src(f["sources"], ids, p) if f["sources"] else ""}</span>'
-                      + (f'<span class="fn">{e_(f["note"])}</span>' if f['note'] else '') + '</li>' for f in e['forms'])
-        parts.append(f'<section class="stack"><span class="label">{"Форма" if e["suppl"] else "Письменные варианты"}</span><ul class="forms">{lis}</ul></section>')
     if e.get('meaning'):
-        parts.append(f'<div class="box"><span class="label">Значение и ограничения</span>{e_(e["meaning"])}</div>')
-    def ex_item(x, k):
-        body = ''
-        if x['text']: body += f'<span class="dt" lang="ddn">{e_(x["text"])}</span>'
-        if x.get('sense'): body += f'<span class="gl"><span class="gt">Русский смысл</span>{e_(x["sense"])}</span>'
-        if x['gloss']:
-            gt = ''
-            if x['text'] and not x.get('sense'):
-                gt = f'<span class="gt">{"Рус. параллельный контекст" if x["gloss_type"] == "rst" else "Пояснение"}</span>'
-            body += f'<span class="gl">{gt}{e_(x["gloss"])}</span>'
-        body += f'<span class="src">{link_src(x["source"], ids, p)}</span>'
-        return f'<li><span class="k">{k})</span><div class="body">{body}</div></li>'
-    if e['examples']:
-        lis = ''.join(ex_item(x, x['k']) for x in e['examples'])
-        parts.append(f'<section class="stack"><span class="label">{"Контексты" if e["suppl"] else "Примеры"} · {len(e["examples"])}</span><ol class="ex">{lis}</ol></section>')
-    for a in e.get('addenda', []):
-        s = f'<section class="stack"><span class="label">Дополнение</span><h2 class="dn" lang="ddn">{e_(a["title"])}</h2>'
-        if a['note']: s += f'<p>{e_(a["note"])}</p>'
-        if a['contexts']: s += '<ol class="ex">' + ''.join(ex_item(x, f'доп. {x["k"]}') for x in a['contexts']) + '</ol>'
+        parts.append(f'<div class="box"><span class="label">Значение и употребление</span>{link_src(e["meaning"], ids, p)}</div>')
+    for v in e['variants']:
+        s = '<section class="variant"><div class="vh">' + (f'<span class="vl">{v["label"]}</span>' if v['label'] else '') + f'<span class="vf" lang="ddn">{e_(v["form"])}</span></div>'
+        s += ''.join(f'<p>{link_src(n, ids, p)}</p>' for n in v['notes'])
+        if v['examples']:
+            s += '<div class="exs">' + ''.join(ex_card(x, ids, p, pid_entries, e) for x in v['examples']) + '</div>'
+        elif v['status']:
+            s += f'<p class="small muted">{e_(v["status"])}</p>'
+        if v['refs']:
+            s += f'<div class="stack" style="gap:4px"><span class="label">Источники формы и дополнительные контексты · {len(v["refs"])}</span>{ref_list(v["refs"])}</div>'
         parts.append(s + '</section>')
-    for c in e.get('clarifications', []):
-        parts.append(f'<div class="box"><span class="label">Уточнение</span>{e_(c)}</div>')
-    if e.get('index_sci') or e.get('index_extra'):
-        s = '<section class="stack small"><span class="label">Указатели для сверки</span>'
-        if e.get('index_sci'): s += f'<p><span class="muted">Научный указатель.</span> {link_src(e["index_sci"], ids, p)}</p>'
-        if e.get('index_extra'): s += f'<p><span class="muted">Дополнительный указатель.</span> {link_src(e["index_extra"], ids, p)}</p>'
-        parts.append(s + '</section>')
+    if e['extra_refs']:
+        parts.append(f'<section class="stack" style="gap:4px"><span class="label">Дополнительные источниковые привязки</span>{ref_list(e["extra_refs"])}</section>')
+    if e.get('sci'):
+        parts.append(f'<section class="stack small"><span class="label">Для сверки</span><p><span class="muted">Научный указатель.</span> {link_src(e["sci"], ids, p)}</p></section>')
     parts.append(f'<p><a href="{p}#w{e["n"]}">Открыть статью в интерактивном словаре с поиском →</a></p>')
     pager = ''
     if prev: pager += f'<a href="{prev["n"]}.html"><small>← предыдущая</small>{e_(prev["title"])}</a>'
@@ -145,19 +169,14 @@ def entry_html(e, ids, prev, nxt):
     return '<article class="stack" style="gap:22px">' + '\n'.join(parts) + '</article>'
 
 
-def sort_key(e):
-    return (e['suppl'], e['title'].lower().replace('ё', 'е'))
-
-
 def static_index(entries):
     letters = [L for L in ALPHA if any(e['letter'] == L for e in entries)]
-    out = ['<div class="stack"><h1>Русско-дендийский словарь</h1>',
-           f'<p class="lead">{e_(SITE_DESC)}</p><div class="letters">']
+    out = ['<div class="stack"><h1>Русско-дендийский словарь</h1>', f'<p class="lead">{e_(SITE_DESC)}</p><div class="letters">']
     for L in letters:
         items = ''.join(
             f'<li><a href="w/{e["n"]}.html">{e_(e["title"])}</a>'
-            + ('<span class="none">—</span>' if e.get('unestablished') else f'<span class="f" lang="ddn">{e_(", ".join(f["form"] for f in e["forms"][:2]))}</span>')
-            + '</li>' for e in sorted([e for e in entries if e['letter'] == L], key=sort_key))
+            + (f'<span class="f" lang="ddn">{e_(", ".join(v["form"] for v in e["variants"][:2]))}</span>' if e['variants'] else '<span class="none">—</span>')
+            + '</li>' for e in entries if e['letter'] == L)
         out.append(f'<section class="lgroup"><div class="L">{L}</div><ul class="wl">{items}</ul></section>')
     out.append('</div></div>')
     return ''.join(out)
@@ -186,24 +205,30 @@ def build_site(data, page, site_dir, base):
     open(os.path.join(site_dir, 'index.html'), 'w', encoding='utf-8').write(idx + body + '\n</body>\n</html>\n')
 
     # страницы слов
+    pid_entries = {}
+    for e in entries:
+        for x in examples_of(e):
+            lst = pid_entries.setdefault(x['pid'], [])
+            if e not in lst: lst.append(e)
     keep = set()
     for i, e in enumerate(entries):
         prev = entries[i - 1] if i > 0 else None
         nxt = entries[i + 1] if i + 1 < len(entries) else None
-        first = e['forms'][0]['form'] if e['forms'] else ''
+        first = e['variants'][0]['form'] if e['variants'] else ''
         title = f'{e["title"]} — {first} · {SITE_NAME}' if first else f'{e["title"]} · {SITE_NAME}'
         url = f'{base}w/{e["n"]}.html'
         term = {'@context': 'https://schema.org', '@type': 'DefinedTerm', 'name': e['title'],
                 'description': entry_desc(e), 'url': url,
                 'inDefinedTermSet': {'@type': 'DefinedTermSet', 'name': SITE_NAME, 'url': base}}
-        if e['forms']:
+        if e['variants']:
             term['alternateName'] = all_forms(e)
         doc = (head(title, entry_desc(e), url, '../assets/site.css', fonts,
                     extra=f'<script type="application/ld+json">{json.dumps(term, ensure_ascii=False)}</script>')
                + header('../')
-               + f'<main class="wrap"><div class="page">{entry_html(e, ids, prev, nxt)}</div></main>\n'
-               + '<footer><div class="wrap">Свод не является нормативным словарём языка. '
-               + f'{e_(data["meta"]["updated"])}</div></footer>\n</body>\n</html>\n')
+               + f'<main class="wrap"><div class="page">{entry_html(e, ids, prev, nxt, pid_entries)}</div></main>\n'
+               + '<footer><div class="wrap">Свод не является нормативным словарём языка.'
+               + (f' Данные документа на {e_(data.get("built"))}.' if data.get('built') else '')
+               + '</div></footer>\n</body>\n</html>\n')
         name = f'{e["n"]}.html'; keep.add(name)
         open(os.path.join(site_dir, 'w', name), 'w', encoding='utf-8').write(doc)
     for f in os.listdir(os.path.join(site_dir, 'w')):
