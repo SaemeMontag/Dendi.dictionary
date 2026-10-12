@@ -76,10 +76,16 @@ def header(prefix):
 '''
 
 
+def all_forms(e):
+    out = [ff for f in e['forms'] for ff in re.split(r';\s*', f['form'])]
+    out += [re.sub(r'\s*\(.*?\)\s*', ' ', a['title'].split(' — ')[0]).strip() for a in e.get('addenda', [])]
+    return list(dict.fromkeys(out))
+
+
 def entry_desc(e):
     if e.get('unestablished'):
         return f'{e["title"]} на языке денди: практическое написание пока не установлено. Научные указатели для сверки — в словаре денди.'
-    forms = ', '.join(dict.fromkeys(f['form'] for f in e['forms']))
+    forms = ', '.join(all_forms(e))
     n = len(e['examples'])
     word = 'контекст' if e['suppl'] else 'пример'
     return f'{e["title"]} на языке денди: {forms}. {n} {plural(n, word, word + "а", word + "ов")} употребления с источниками.'[:300]
@@ -88,7 +94,8 @@ def entry_desc(e):
 def entry_html(e, ids, prev, nxt):
     p = '../'
     if e['suppl']:
-        meta = f'<span>№ {e["n"]}</span><span>{e_(e.get("label"))}</span>'
+        tag = f'<span class="tag warn">контекстов: {e["count"]}</span>' if e.get('few') else ''
+        meta = f'<span>№ {e["n"]}</span><span>{e_(e.get("label"))}</span>{tag}'
     else:
         tag = ''
         if e.get('unestablished'): tag = '<span class="tag warn">написание не установлено</span>'
@@ -104,18 +111,27 @@ def entry_html(e, ids, prev, nxt):
         parts.append(f'<section class="stack"><span class="label">{"Форма" if e["suppl"] else "Письменные варианты"}</span><ul class="forms">{lis}</ul></section>')
     if e.get('meaning'):
         parts.append(f'<div class="box"><span class="label">Значение и ограничения</span>{e_(e["meaning"])}</div>')
+    def ex_item(x, k):
+        body = ''
+        if x['text']: body += f'<span class="dt" lang="ddn">{e_(x["text"])}</span>'
+        if x.get('sense'): body += f'<span class="gl"><span class="gt">Русский смысл</span>{e_(x["sense"])}</span>'
+        if x['gloss']:
+            gt = ''
+            if x['text'] and not x.get('sense'):
+                gt = f'<span class="gt">{"Рус. параллельный контекст" if x["gloss_type"] == "rst" else "Пояснение"}</span>'
+            body += f'<span class="gl">{gt}{e_(x["gloss"])}</span>'
+        body += f'<span class="src">{link_src(x["source"], ids, p)}</span>'
+        return f'<li><span class="k">{k})</span><div class="body">{body}</div></li>'
     if e['examples']:
-        lis = []
-        for x in e['examples']:
-            body = ''
-            if x['text']: body += f'<span class="dt" lang="ddn">{e_(x["text"])}</span>'
-            if x['gloss']:
-                gt = ''
-                if x['text']: gt = f'<span class="gt">{"Рус. параллельный контекст" if x["gloss_type"] == "rst" else "Пояснение"}</span>'
-                body += f'<span class="gl">{gt}{e_(x["gloss"])}</span>'
-            body += f'<span class="src">{link_src(x["source"], ids, p)}</span>'
-            lis.append(f'<li><span class="k">{x["k"]})</span><div class="body">{body}</div></li>')
-        parts.append(f'<section class="stack"><span class="label">{"Контексты" if e["suppl"] else "Примеры"} · {len(e["examples"])}</span><ol class="ex">{"".join(lis)}</ol></section>')
+        lis = ''.join(ex_item(x, x['k']) for x in e['examples'])
+        parts.append(f'<section class="stack"><span class="label">{"Контексты" if e["suppl"] else "Примеры"} · {len(e["examples"])}</span><ol class="ex">{lis}</ol></section>')
+    for a in e.get('addenda', []):
+        s = f'<section class="stack"><span class="label">Дополнение</span><h2 class="dn" lang="ddn">{e_(a["title"])}</h2>'
+        if a['note']: s += f'<p>{e_(a["note"])}</p>'
+        if a['contexts']: s += '<ol class="ex">' + ''.join(ex_item(x, f'доп. {x["k"]}') for x in a['contexts']) + '</ol>'
+        parts.append(s + '</section>')
+    for c in e.get('clarifications', []):
+        parts.append(f'<div class="box"><span class="label">Уточнение</span>{e_(c)}</div>')
     if e.get('index_sci') or e.get('index_extra'):
         s = '<section class="stack small"><span class="label">Указатели для сверки</span>'
         if e.get('index_sci'): s += f'<p><span class="muted">Научный указатель.</span> {link_src(e["index_sci"], ids, p)}</p>'
@@ -181,7 +197,7 @@ def build_site(data, page, site_dir, base):
                 'description': entry_desc(e), 'url': url,
                 'inDefinedTermSet': {'@type': 'DefinedTermSet', 'name': SITE_NAME, 'url': base}}
         if e['forms']:
-            term['alternateName'] = list(dict.fromkeys(f['form'] for f in e['forms']))
+            term['alternateName'] = all_forms(e)
         doc = (head(title, entry_desc(e), url, '../assets/site.css', fonts,
                     extra=f'<script type="application/ld+json">{json.dumps(term, ensure_ascii=False)}</script>')
                + header('../')

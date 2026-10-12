@@ -1,0 +1,512 @@
+<title>Словарь денди</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Gentium+Book+Plus:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: справочник — шапка с полосой тканого узора, липкий алфавит, одна колонка чтения ~68ch, статьи как карточки словаря без лишних рамок */
+:root {
+  --bg: #f5f6f9;          /* небелёный хлопок с холодным индиго-оттенком */
+  --paper: #ffffff;
+  --ink: #1b2145;         /* индиго-чернила */
+  --muted: #5d6384;
+  --line: #dde0ea;
+  --accent: #2c3f9b;      /* индиго */
+  --accent-soft: #e7eaf7;
+  --ochre: #a2621b;       /* пометки: мало примеров, написание не установлено */
+  --ochre-soft: #f6ecdc;
+  --weave-a: #2c3f9b;
+  --weave-b: #f5f6f9;
+  --f-display: "Alegreya", "PT Serif", Georgia, serif;
+  --f-body: "Alegreya Sans", "PT Sans", "Segoe UI", system-ui, sans-serif;
+  --f-dendi: "Gentium Book Plus", "Gentium Plus", "Noto Serif", "Charis SIL", Georgia, serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12152a; --paper: #1a1e38; --ink: #e6e8f4; --muted: #a2a7c6; --line: #2d3254;
+    --accent: #9fb0ff; --accent-soft: #252c55; --ochre: #e0a65e; --ochre-soft: #3a2d1c;
+    --weave-a: #6f82e0; --weave-b: #12152a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12152a; --paper: #1a1e38; --ink: #e6e8f4; --muted: #a2a7c6; --line: #2d3254;
+  --accent: #9fb0ff; --accent-soft: #252c55; --ochre: #e0a65e; --ochre-soft: #3a2d1c;
+  --weave-a: #6f82e0; --weave-b: #12152a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 17px; line-height: 1.55; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.dn { font-family: var(--f-dendi); }
+.wrap { max-width: 960px; margin: 0 auto; padding-inline: 16px; }
+
+header.top { background: var(--paper); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-block: 18px 14px; }
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.brand a { color: var(--ink); }
+.brand .name { font-family: var(--f-display); font-weight: 700; font-size: 2rem; line-height: 1; letter-spacing: .01em; }
+.brand .sub { color: var(--muted); font-size: .95rem; margin-top: 4px; }
+nav.main { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .98rem; margin-left: auto; }
+nav.main a { color: var(--muted); padding: 2px 0; border-bottom: 2px solid transparent; }
+nav.main a.on { color: var(--ink); border-bottom-color: var(--accent); text-decoration: none; }
+.weave { height: 8px; background:
+  repeating-linear-gradient(90deg, var(--weave-a) 0 6px, var(--weave-b) 6px 9px, var(--weave-a) 9px 11px, var(--weave-b) 11px 18px); opacity: .85; }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; flex-direction: column; gap: 8px; padding-block: 10px; }
+.search { display: flex; gap: 8px; align-items: center; }
+.search input[type=search] { flex: 1; min-width: 0; font: inherit; font-family: var(--f-dendi); font-size: 1.05rem; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.search input[type=search]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--muted); white-space: nowrap; }
+.chars { display: flex; gap: 4px; }
+.chars button { font-family: var(--f-dendi); font-size: 1rem; width: 32px; height: 34px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 6px; cursor: pointer; }
+.chars button:hover { border-color: var(--accent); }
+.abc { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.abc a, .abc span { flex: 0 0 auto; min-width: 30px; text-align: center; font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; padding: 3px 4px; border-radius: 5px; }
+.abc a { color: var(--accent); }
+.abc a:hover { background: var(--accent-soft); text-decoration: none; }
+.abc a.on { background: var(--accent); color: var(--paper); }
+.abc span { color: var(--line); }
+
+main { padding-block: 24px 64px; }
+.page { max-width: 760px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: 2.3rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.lead { font-size: 1.1rem; color: var(--ink); }
+.muted { color: var(--muted); }
+.small { font-size: .9rem; }
+.label { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+.code { font-family: var(--f-mono); font-size: .82em; }
+.statline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-variant-numeric: tabular-nums; color: var(--muted); font-size: .95rem; }
+.statline b { color: var(--ink); font-weight: 700; }
+
+/* словник */
+.letters { display: flex; flex-direction: column; gap: 22px; margin-top: 8px; }
+.lgroup { display: grid; grid-template-columns: 52px 1fr; gap: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.lgroup .L { font-family: var(--f-display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent); }
+.wl { list-style: none; margin: 0; padding: 0; columns: 3 200px; column-gap: 24px; }
+.wl li { break-inside: avoid; padding: 2px 0; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.wl .f { font-family: var(--f-dendi); color: var(--muted); font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.wl .none { color: var(--ochre); font-size: .85rem; }
+.tag { display: inline-block; font-size: .72rem; letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; white-space: nowrap; font-weight: 500; vertical-align: 2px; }
+.tag.warn { background: var(--ochre-soft); color: var(--ochre); }
+.tag.info { background: var(--accent-soft); color: var(--accent); }
+
+/* статья */
+.crumbs { font-size: .9rem; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.entry-head { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.entry-head .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-variant-numeric: tabular-nums; color: var(--muted); font-size: .95rem; }
+.forms { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.forms li { display: grid; grid-template-columns: minmax(0, 13rem) 1fr; gap: 4px 16px; align-items: baseline; }
+.forms .fw { font-family: var(--f-dendi); font-weight: 700; font-size: 1.45rem; line-height: 1.2; overflow-wrap: anywhere; }
+.forms .fs { font-size: .9rem; color: var(--muted); min-width: 0; }
+.forms .fn { grid-column: 2; font-size: .95rem; min-width: 0; }
+.box { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.box.warn { background: var(--ochre-soft); border-color: transparent; }
+.box .label { display: block; margin-bottom: 4px; }
+.ex { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ex li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 2px 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.ex li:first-child { border-top: 0; }
+.ex .k { font-variant-numeric: tabular-nums; color: var(--muted); font-family: var(--f-mono); font-size: .85rem; padding-top: 4px; }
+.ex .body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ex .dt { font-family: var(--f-dendi); font-size: 1.15rem; font-style: italic; overflow-wrap: anywhere; }
+.ex .gl { font-size: 1rem; }
+.ex .gl .gt { color: var(--muted); font-size: .82rem; margin-right: 6px; }
+.ex .src { font-size: .85rem; color: var(--muted); }
+mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; font-style: normal; }
+.related { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pager { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; font-size: .98rem; }
+.pager a { display: flex; flex-direction: column; min-width: 0; }
+.pager a.next { text-align: right; margin-left: auto; }
+.pager small { color: var(--muted); font-size: .8rem; }
+
+/* поиск */
+.res { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.res li { padding: 10px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.res .rt { font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; }
+.res .rf { font-family: var(--f-dendi); color: var(--muted); overflow-wrap: anywhere; }
+.res .rx { font-size: .92rem; color: var(--muted); overflow-wrap: anywhere; }
+.res .rx .dn { font-style: italic; color: var(--ink); }
+
+/* денди → русский */
+.rev { display: flex; flex-direction: column; gap: 18px; }
+.rev .grp { display: grid; grid-template-columns: 52px 1fr; gap: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.rev .grp .L { font-family: var(--f-dendi); font-weight: 700; font-size: 1.8rem; line-height: 1; color: var(--accent); }
+.rev dl { margin: 0; display: grid; grid-template-columns: minmax(0, max-content) 1fr; gap: 3px 16px; }
+.rev dt { font-family: var(--f-dendi); font-weight: 700; overflow-wrap: anywhere; }
+.rev dd { margin: 0; min-width: 0; }
+
+/* грамматика */
+.rules { counter-reset: r; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
+.rules li { display: grid; grid-template-columns: 2rem 1fr; gap: 8px; }
+.rules .n { font-family: var(--f-display); font-weight: 700; color: var(--accent); font-size: 1.15rem; }
+.gex { display: flex; flex-direction: column; gap: 12px; }
+.gex .box { display: flex; flex-direction: column; gap: 4px; }
+.gex .id { font-family: var(--f-mono); font-size: .8rem; color: var(--accent); }
+.gex .d { font-family: var(--f-dendi); font-size: 1.3rem; font-style: italic; }
+.gex .r { font-weight: 500; }
+.gloss { display: flex; flex-wrap: wrap; gap: 6px 4px; margin-top: 4px; }
+.gloss span { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 3px 8px; background: var(--bg); border-radius: 6px; }
+.gloss .gw { font-family: var(--f-dendi); font-style: italic; }
+.gloss .gg { font-size: .78rem; color: var(--muted); }
+
+/* источники */
+.bars { display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums; }
+.brow { display: grid; grid-template-columns: 4.2rem 1fr 6.5rem; gap: 10px; align-items: center; font-size: .92rem; }
+.brow .track { height: 14px; background: var(--accent-soft); border-radius: 3px; overflow: hidden; }
+.brow .fill { height: 100%; background: var(--accent); }
+.brow .v { text-align: right; color: var(--muted); }
+.srcs { display: flex; flex-direction: column; gap: 16px; }
+.srcs article { display: grid; grid-template-columns: 6rem 1fr; gap: 4px 14px; scroll-margin-top: 140px; }
+.srcs .c { font-family: var(--f-mono); font-weight: 500; color: var(--accent); overflow-wrap: anywhere; }
+.srcs .t { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.srcs .u { font-size: .85rem; overflow-wrap: anywhere; }
+.srcs article.hl { background: var(--accent-soft); border-radius: 8px; }
+footer { border-top: 1px solid var(--line); padding-block: 18px 28px; color: var(--muted); font-size: .88rem; }
+
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  h1 { font-size: 1.9rem; }
+  .brand .name { font-size: 1.7rem; }
+  nav.main { margin-left: 0; }
+  .forms li { grid-template-columns: 1fr; }
+  .forms .fn { grid-column: 1; }
+  .lgroup, .rev .grp { grid-template-columns: 1fr; gap: 4px; }
+  .srcs article { grid-template-columns: 1fr; }
+  .brow { grid-template-columns: 3.6rem 1fr 5.6rem; }
+  .chk span.long { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><a href="#home"><span class="name">Денди</span></a><span class="sub">Русско-дендийский словарь · сонгай северного Бенина</span></div>
+    <nav class="main" id="nav">
+      <a href="#home" data-r="home">Словник</a>
+      <a href="#dendi" data-r="dendi">Денди → русский</a>
+      <a href="#grammar" data-r="grammar">Грамматика</a>
+      <a href="#sources" data-r="sources">Источники</a>
+      <a href="#about" data-r="about">Как пользоваться</a>
+    </nav>
+  </div>
+  <div class="weave" aria-hidden="true"></div>
+</header>
+<div class="bar">
+  <div class="wrap">
+    <form class="search" id="sform" role="search">
+      <input type="search" id="q" placeholder="Слово по-русски или на денди: вода, hari, kpaarɛ…" autocomplete="off" aria-label="Поиск по словарю">
+      <div class="chars" aria-label="Вставить букву">
+        <button type="button" data-ch="ɛ" title="Вставить ɛ">ɛ</button><button type="button" data-ch="ɔ" title="Вставить ɔ">ɔ</button><button type="button" data-ch="ŋ" title="Вставить ŋ">ŋ</button>
+      </div>
+    </form>
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+      <nav class="abc" id="abc" aria-label="Алфавитный указатель"></nav>
+      <label class="chk"><input type="checkbox" id="inex"> <span>искать <span class="long">и </span>в примерах</span></label>
+    </div>
+  </div>
+</div>
+<main class="wrap"><div id="view" class="page"></div></main>
+<footer><div class="wrap" id="foot">Свод не является нормативным словарём языка.</div></footer>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const E = D.entries;
+const byN = {}; E.forEach(e => byN[e.n] = e);
+const MAIN = E.filter(e => !e.suppl);
+const ST = { main: MAIN.length, suppl: E.length - MAIN.length, ex: MAIN.reduce((s, e) => s + e.examples.length, 0),
+  five: MAIN.filter(e => e.examples.length >= 5).length, unest: MAIN.filter(e => e.unestablished).length };
+const ALPHA = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЭЮЯ'.split('');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const foldRu = s => s.toLowerCase().replace(/ё/g, 'е');
+const foldDn = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/ɛ/g,'e').replace(/ɔ/g,'o').replace(/ŋ/g,'n').replace(/ɲ/g,'ny').replace(/[‹›«»"'’.,;:!?()\/]/g,'').replace(/[\s-]+/g,'');
+const fold = s => foldDn(foldRu(s));
+
+// источники → якоря
+const SRC_IDS = {};
+D.sources.forEach((s, i) => {
+  const codes = s.code.split(/[ \/—]+/).filter(c => /^[A-Z0-9]+$/.test(c));
+  s.id = 'src' + i; codes.forEach(c => SRC_IDS[c] = s.id);
+  if (s.code.startsWith('T68')) SRC_IDS['T68/72'] = s.id;
+  if (s.code.startsWith('RST')) SRC_IDS['RST'] = s.id;
+});
+const linkSrc = s => esc(s).replace(/\b(T68\/72|NT18|NT95|AL65|AL64|COV|CAL|CFA|ANT|SM19|N78|N89|G88|GYK|RST|AT|AZ|H)\b/g,
+  m => SRC_IDS[m] ? `<a class="code" href="#${SRC_IDS[m]}" title="Описание источника">${m}</a>` : m);
+
+// формы: одинаковое написание в разных статьях
+const addForm = a => a.title.split(' — ')[0].replace(/\s*\(.*?\)\s*/g, ' ').trim();
+const allForms = e => [...e.forms.flatMap(f => f.form.split(/;\s*/)), ...(e.addenda || []).map(addForm)];
+const allExamples = e => [...e.examples, ...(e.addenda || []).flatMap(a => a.contexts)];
+const formIndex = {};
+E.forEach(e => allForms(e).forEach(ff => {
+  const k = foldDn(ff); (formIndex[k] = formIndex[k] || []).push({e, form: ff});
+}));
+const lettersPresent = new Set(E.map(e => e.letter));
+const tagsFor = e => {
+  const t = [];
+  if (e.suppl) t.push('<span class="tag info">дополнение</span>');
+  if (e.unestablished) t.push('<span class="tag warn">написание не установлено</span>');
+  else if (e.few) t.push(`<span class="tag warn">${e.suppl ? 'контекстов' : 'примеров'}: ${e.count}</span>`);
+  return t.join(' ');
+};
+const wordLink = e => `<a href="#w${e.n}">${esc(e.title)}</a>`;
+const primaryForms = e => e.forms.slice(0, 2).map(f => f.form).join(', ');
+
+// алфавит
+function drawAbc(active) {
+  document.getElementById('abc').innerHTML = ALPHA.map((L, i) =>
+    lettersPresent.has(L) ? `<a href="#l${i}" class="${L === active ? 'on' : ''}">${L}</a>` : `<span aria-hidden="true">${L}</span>`).join('');
+}
+
+function sortedIn(L) { return E.filter(e => e.letter === L).sort((a, b) => (a.suppl - b.suppl) || foldRu(a.title).localeCompare(foldRu(b.title), 'ru')); }
+
+function letterGroup(L) {
+  const items = sortedIn(L).map(e => `<li>${wordLink(e)}${e.unestablished ? '<span class="none">—</span>' : `<span class="f">${esc(primaryForms(e))}</span>`}${e.suppl ? ' <span class="tag info">доп.</span>' : ''}</li>`).join('');
+  return `<section class="lgroup" id="g${ALPHA.indexOf(L)}"><div class="L">${L}</div><ul class="wl">${items}</ul></section>`;
+}
+
+const V = document.getElementById('view');
+function vHome() {
+  const m = D.meta;
+  return `<div class="stack">
+    <h1>Русско-дендийский словарь</h1>
+    <p class="lead">Денди — сонгайский язык северного Бенина и приграничья с Нигером и Нигерией. Словарь охватывает ${ST.main} ${plural(ST.main, 'значение', 'значения', 'значений')} списка Сводеша: у каждого слова указаны письменные варианты с источником и короткие засвидетельствованные примеры употребления.</p>
+    <div class="statline"><span><b>${ST.main}</b> ${plural(ST.main, 'статья', 'статьи', 'статей')} Сводеша</span><span><b>${ST.suppl}</b> ${plural(ST.suppl, 'дополнительная', 'дополнительных', 'дополнительных')}</span><span><b>${ST.ex}</b> ${plural(ST.ex, 'пример', 'примера', 'примеров')}</span><span><b>${ST.five}</b> ${plural(ST.five, 'статья', 'статьи', 'статей')} с пятью и более примерами</span><span><b>${ST.unest}</b> без установленного написания</span></div>
+    <p class="small muted">${esc(m.updated)} <a href="#about">Как пользоваться словарём</a></p>
+    <div class="letters">${ALPHA.filter(L => lettersPresent.has(L)).map(letterGroup).join('')}</div>
+  </div>`;
+}
+
+function vLetter(i) {
+  const L = ALPHA[i];
+  if (!lettersPresent.has(L)) return vHome();
+  const list = sortedIn(L);
+  return `<div class="stack">
+    <div class="crumbs"><a href="#home">Словник</a><span>›</span><span>${L}</span></div>
+    <h1>${L}</h1>
+    <p class="muted">${list.length} ${plural(list.length, 'статья', 'статьи', 'статей')}</p>
+    <ul class="res">${list.map(e => `<li><span class="rt">${wordLink(e)} ${tagsFor(e)}</span>${e.unestablished ? '<span class="rx">Практическое написание не установлено</span>' : `<span class="rf">${esc(e.forms.map(f => f.form).join(' · '))}</span>`}</li>`).join('')}</ul>
+  </div>`;
+}
+
+function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; }
+
+function vWord(n) {
+  const e = byN[n]; if (!e) return vHome();
+  const idx = E.indexOf(e), prev = E[idx - 1], next = E[idx + 1];
+  const forms = e.forms.length ? `<section class="stack"><span class="label">${e.suppl ? 'Форма' : 'Письменные варианты'}</span><ul class="forms">${e.forms.map(f =>
+    `<li><span class="fw">${esc(f.form)}</span><span class="fs">${f.sources ? linkSrc(f.sources) : ''}</span>${f.note ? `<span class="fn">${esc(f.note)}</span>` : ''}</li>`).join('')}</ul></section>` : '';
+  const rel = new Map();
+  allForms(e).forEach(ff => (formIndex[foldDn(ff)] || []).forEach(x => { if (x.e !== e) rel.set(x.e.n, x); }));
+  const relHtml = rel.size ? `<section class="stack"><span class="label">То же написание в других статьях</span><div class="related">${[...rel.values()].map(x => `<span><span class="dn">${esc(x.form)}</span> → ${wordLink(x.e)}</span>`).join('')}</div></section>` : '';
+  const exItem = (x, k) => `<li><span class="k">${k})</span><div class="body">
+      ${x.text ? `<span class="dt">${esc(x.text)}</span>` : ''}
+      ${x.sense ? `<span class="gl"><span class="gt">Русский смысл</span>${esc(x.sense)}</span>` : ''}
+      ${x.gloss ? `<span class="gl">${x.text && !x.sense ? `<span class="gt">${x.gloss_type === 'rst' ? 'Рус. параллельный контекст' : 'Пояснение'}</span>` : ''}${esc(x.gloss)}</span>` : ''}
+      <span class="src">${linkSrc(x.source)}</span></div></li>`;
+  const ex = e.examples.length ? `<section class="stack"><span class="label">${e.suppl ? 'Контексты' : 'Примеры'} · ${e.examples.length}</span><ol class="ex">${e.examples.map(x => exItem(x, x.k)).join('')}</ol></section>` : '';
+  const adds = (e.addenda || []).map(a => `<section class="stack"><span class="label">Дополнение</span><h2 class="dn">${esc(a.title)}</h2>${a.note ? `<p>${esc(a.note)}</p>` : ''}${a.contexts.length ? `<ol class="ex">${a.contexts.map(x => exItem(x, 'доп. ' + x.k)).join('')}</ol>` : ''}</section>`).join('');
+  const clar = (e.clarifications || []).map(c => `<div class="box"><span class="label">Уточнение</span>${esc(c)}</div>`).join('');
+  const meta = e.suppl ? `<span>№ ${e.n}</span><span>${esc(e.label)}</span>${e.few ? tagsFor(e).replace('<span class="tag info">дополнение</span> ', '') : ''}`
+    : `<span>№ ${e.n}</span><span>Сводеш № ${e.swadesh}</span><span>Примеров: ${e.count}</span>${tagsFor(e)}`;
+  return `<article class="stack" style="gap:22px">
+    <div class="crumbs"><a href="#home">Словник</a><span>›</span><a href="#l${ALPHA.indexOf(e.letter)}">${e.letter}</a></div>
+    <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div></div>
+    ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
+    ${forms}
+    ${e.meaning ? `<div class="box"><span class="label">Значение и ограничения</span>${esc(e.meaning)}</div>` : ''}
+    ${ex}
+    ${adds}
+    ${clar}
+    ${relHtml}
+    ${e.index_sci || e.index_extra ? `<section class="stack small"><span class="label">Указатели для сверки</span>
+      ${e.index_sci ? `<p><span class="muted">Научный указатель.</span> ${linkSrc(e.index_sci)}</p>` : ''}
+      ${e.index_extra ? `<p><span class="muted">Дополнительный указатель.</span> ${linkSrc(e.index_extra)}</p>` : ''}</section>` : ''}
+    <nav class="pager">${prev ? `<a href="#w${prev.n}"><small>← предыдущая</small>${esc(prev.title)}</a>` : ''}${next ? `<a class="next" href="#w${next.n}"><small>следующая →</small>${esc(next.title)}</a>` : ''}</nav>
+  </article>`;
+}
+
+function vDendi() {
+  const rows = [];
+  E.forEach(e => allForms(e).forEach(ff => rows.push({ form: ff, k: foldDn(ff), e })));
+  const map = new Map();
+  rows.forEach(r => { const key = r.form; if (!map.has(key)) map.set(key, { form: r.form, k: r.k, es: [] }); const m = map.get(key); if (!m.es.includes(r.e)) m.es.push(r.e); });
+  const all = [...map.values()].sort((a, b) => a.k.localeCompare(b.k) || a.form.localeCompare(b.form));
+  const groups = new Map();
+  all.forEach(r => { const g = (r.k[0] || '?').toUpperCase(); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); });
+  return `<div class="stack">
+    <h1>Денди → русский</h1>
+    <p class="muted">Все ${all.length} письменных вариантов из статей, по алфавиту. Знаки тона и долготы не влияют на порядок; ɛ стоит при e, ɔ — при o, ŋ — при n.</p>
+    <div class="rev">${[...groups].map(([g, rs]) => `<section class="grp"><div class="L">${g.toLowerCase()}</div><dl>${rs.map(r => `<dt>${esc(r.form)}</dt><dd>${r.es.map(wordLink).join(', ')}</dd>`).join('')}</dl></section>`).join('')}</div>
+  </div>`;
+}
+
+function vGrammar() {
+  const G = D.grammar;
+  const suppl = E.filter(e => e.suppl);
+  const glossOf = (x) => {
+    const words = x.dendi.replace(/[?…]/g, '').trim().split(/\s+/);
+    const parts = x.parse.replace(/^[^:]+:\s*/, '').split(/;\s*(?=\d+:)/).map(p => p.replace(/^\d+:\s*/, '').replace(/\.$/, ''));
+    if (words.length !== parts.length) return `<p class="small muted">${esc(x.parse)}</p>`;
+    return `<div class="gloss">${words.map((w, i) => `<span><span class="gw">${esc(w)}</span><span class="gg">${esc(parts[i])}</span></span>`).join('')}</div>`;
+  };
+  return `<div class="stack" style="gap:22px">
+    <div class="stack"><span class="label">${esc(G.subtitle)}</span><h1>Вопросы на «да/нет»</h1><p class="muted small">${esc(G.date)}</p></div>
+    ${G.intro.map(p => `<p>${esc(p)}</p>`).join('')}
+    ${G.correction ? `<div class="box warn"><span class="label">Исправление прежнего объяснения</span>${esc(G.correction)}</div>` : ''}
+    <h2>Правила и порядок слов</h2>
+    <ol class="rules">${G.rules.map(r => `<li><span class="n">${r.n}</span><div class="stack" style="gap:4px"><h3>${esc(r.title)}</h3><p>${linkSrc(r.text)}</p></div></li>`).join('')}</ol>
+    <h2>Примеры с разбором по словам</h2>
+    <p class="small muted">Б — вопросы с частицей ba, Д — с частицей dee. Под каждым словом дана его глосса по порядку исходной строки.</p>
+    <div class="gex">${G.examples.map(x => `<div class="box"><span class="id">${x.id}</span><span class="d">${esc(x.dendi)}</span><span class="r">${esc(x.ru)}</span>${glossOf(x)}<p class="small">${esc(x.comment)}</p><span class="small muted">${linkSrc(x.source)}</span></div>`).join('')}</div>
+    <h2>Источники и проверка</h2>
+    ${G.sources.map(p => `<p class="small">${linkSrc(p)}</p>`).join('')}
+    <h2>Дополнительные статьи · ${suppl.length}</h2>
+    <p class="small muted">Служебные слова, ответы и слова из обсуждений вне списка Сводеша, № ${suppl.length ? suppl[0].n + '–' + suppl[suppl.length - 1].n : ''}.</p>
+    <ul class="res">${suppl.map(e => `<li><span class="rt">${wordLink(e)} ${e.few ? tagsFor(e).replace('<span class="tag info">дополнение</span> ', '') : ''}</span><span class="rf">${esc(e.forms[0].form)} — ${esc(e.forms[0].note)}</span></li>`).join('')}</ul>
+    ${(G.notes || []).map(s => `<section class="stack">${s.title ? `<h3>${esc(s.title)}</h3>` : ''}${s.paras.map(p => `<p class="small">${linkSrc(p)}</p>`).join('')}</section>`).join('')}
+  </div>`;
+}
+
+function vSources(hl) {
+  const dist = D.meta.distribution;
+  const max = Math.max(70, Math.ceil(Math.max(0, ...dist.map(d => parseFloat(d.pct.replace(',', '.')))) / 10) * 10);
+  return `<div class="stack" style="gap:22px">
+    <h1>Источники</h1>
+    <p>${esc(D.sources_intro)}</p>
+    <section class="stack"><h2>Распределение примеров</h2>
+      <div class="bars" role="img" aria-label="Доля примеров по источникам">${dist.map(d => `<div class="brow"><a class="code" href="#${SRC_IDS[d.code]}">${d.code}</a><div class="track" title="${esc(d.label)}"><div class="fill" style="width:${(parseFloat(d.pct.replace(',', '.')) / max * 100).toFixed(1)}%"></div></div><span class="v">${d.n} · ${d.pct}%</span></div>`).join('')}</div>
+      <p class="small muted">Шкала 0–${max}% от ${ST.ex} примеров основной части. ${dist.map(d => `${d.code} — ${esc(d.label)}`).join('; ')}.</p>
+      ${D.meta.distribution_notes.map(p => `<p class="small">${esc(p)}</p>`).join('')}
+    </section>
+    <section class="stack"><h2>Библиография</h2>
+      <div class="srcs">${D.sources.map(s => `<article id="${s.id}" class="${s.id === hl ? 'hl' : ''}"><span class="c">${esc(s.code)}</span><div class="t"><p>${esc(s.desc)}</p>${s.url ? `<a class="u" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : ''}</div></article>`).join('')}</div>
+    </section>
+    <section class="stack"><h2>Статьи с менее чем пятью примерами</h2>
+      <p class="small">${fewLinks(D.few[0] || '')}</p>
+      ${D.few.slice(1).map(p => `<p class="small muted">${esc(p)}</p>`).join('')}
+    </section>
+  </div>`;
+}
+function fewLinks(text) {
+  return [...text.matchAll(/(.+?) \((\d+)\)(?:; |$)/g)].map(m => {
+    const e = E.find(x => !x.suppl && foldRu(x.title) === foldRu(m[1]));
+    return e ? `<a href="#w${e.n}">${esc(m[1])}</a> (${m[2]})` : `${esc(m[1])} (${m[2]})`;
+  }).join('; ');
+}
+
+function vAbout() {
+  const m = D.meta;
+  return `<div class="stack" style="gap:18px">
+    <h1>Как пользоваться</h1>
+    ${m.howto.map(p => `<p>${linkSrc(p)}</p>`).join('')}
+    <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона и долготы можно не набирать: <span class="dn">kpaare</span> найдёт <span class="dn">kpaarɛ</span>, а <span class="dn">beeri</span> найдёт и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по фрагментам и пояснениям.</div>
+    <div class="box"><span class="label">Пометки</span><p><span class="tag warn">примеров: 3</span> — в статье меньше пяти примеров.</p><p style="margin-top:6px"><span class="tag warn">написание не установлено</span> — проверенного письменного эквивалента пока нет; это не означает, что в языке нет такого слова.</p><p style="margin-top:6px"><span class="tag info">дополнение</span> — служебные слова, ответы и слова из обсуждений вне списка Сводеша, № ${ST.main + 1}–${E.length}.</p></div>
+    <p class="small muted">Под формами слов на сайте опущена повторяющаяся помета документа: «Засвидетельствованная форма в данном контексте. См. пояснение к примеру; грамматические показатели и тон сохранены». Она относится ко всем формам с примерами из учебных текстов.</p>
+  </div>`;
+}
+
+// поиск
+const IDX = E.map(e => ({
+  e, t: foldRu(e.title), tf: fold(e.title),
+  forms: [...e.forms.map(f => ({ raw: f.form, k: foldDn(f.form) })),
+          ...allForms(e).filter(ff => !e.forms.some(f => f.form === ff)).map(ff => ({ raw: ff, k: foldDn(ff) }))],
+  ex: allExamples(e).map(x => ({ x, k: fold(x.text + ' ' + (x.sense || '') + ' ' + x.gloss), kd: foldDn(x.text) }))
+}));
+let query = '', inEx = false;
+try { inEx = localStorage.getItem('dn-inex') === '1'; } catch (_) {}
+document.getElementById('inex').checked = inEx;
+
+function hlDn(text, q) {
+  // подсветка с учётом свёртки диакритики: ищем по словам
+  const qk = foldDn(q); if (!qk) return esc(text);
+  return text.split(/(\s+)/).map(w => foldDn(w).includes(qk) && qk.length > 1 ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
+}
+function vSearch() {
+  const q = query.trim();
+  if (!q) return vHome();
+  const qr = foldRu(q), qk = fold(q);
+  const out = [];
+  IDX.forEach(r => {
+    let score = 0, hitForm = null, hitEx = [];
+    if (r.t === qr) score = 100; else if (r.t.startsWith(qr)) score = 80; else if (r.t.includes(qr)) score = 60;
+    r.forms.forEach(f => {
+      let s = 0;
+      if (f.k === qk) s = 95; else if (f.k.startsWith(qk)) s = 75; else if (qk.length > 2 && f.k.includes(qk)) s = 50;
+      if (s > score) { score = s; hitForm = f.raw; } else if (s && !hitForm) hitForm = f.raw;
+    });
+    if (inEx && qk.length > 1) {
+      r.ex.forEach(x => { if (x.k.includes(qk)) hitEx.push(x.x); });
+      if (hitEx.length && !score) score = 20;
+    }
+    if (score) out.push({ r, score, hitForm, hitEx });
+  });
+  out.sort((a, b) => b.score - a.score || a.r.e.n - b.r.e.n);
+  if (!out.length) return `<div class="stack"><h1>Ничего не найдено</h1><p>По запросу «${esc(q)}» нет ни русских заголовков, ни дендийских форм${inEx ? ', ни примеров' : ''}. ${inEx ? '' : 'Попробуйте включить «искать в примерах».'} Тон и долготу можно не набирать.</p></div>`;
+  return `<div class="stack"><h1>Поиск: «${esc(q)}»</h1><p class="muted">${out.length} ${plural(out.length, 'статья', 'статьи', 'статей')}</p>
+    <ul class="res">${out.slice(0, 120).map(o => {
+      const e = o.r.e;
+      const forms = e.forms.map(f => f.form === o.hitForm ? `<mark>${esc(f.form)}</mark>` : esc(f.form)).join(' · ');
+      const exs = o.hitEx.slice(0, 3).map(x => `<span class="rx">${x.text ? `<span class="dn">${hlDn(x.text, q)}</span> — ` : ''}${esc(x.gloss)}</span>`).join('');
+      return `<li><span class="rt">${wordLink(e)} ${tagsFor(e)}</span>${e.unestablished ? '<span class="rx">Практическое написание не установлено</span>' : `<span class="rf">${forms}</span>`}${exs}${o.hitEx.length > 3 ? `<span class="rx">и ещё ${o.hitEx.length - 3} в примерах</span>` : ''}</li>`;
+    }).join('')}</ul></div>`;
+}
+
+// маршрутизация
+function route() {
+  const h = location.hash.slice(1) || 'home';
+  let html, nav = '', L = null, scrollTo = null;
+  let m;
+  if ((m = h.match(/^w(\d+)$/))) { html = vWord(+m[1]); L = byN[+m[1]]?.letter; }
+  else if ((m = h.match(/^l(\d+)$/))) { html = vLetter(+m[1]); L = ALPHA[+m[1]]; }
+  else if ((m = h.match(/^g(\d+)$/))) { html = vHome(); nav = 'home'; scrollTo = h; L = ALPHA[+m[1]]; }
+  else if ((m = h.match(/^src\d+$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
+  else if (h === 'search') { html = vSearch(); }
+  else if (['dendi', 'grammar', 'sources', 'about'].includes(h)) { html = { dendi: vDendi, grammar: vGrammar, sources: vSources, about: vAbout }[h](); nav = h; }
+  else { html = vHome(); nav = 'home'; }
+  V.innerHTML = html;
+  const we = (m = h.match(/^w(\d+)$/)) ? byN[+m[1]] : null;
+  document.title = we ? `${we.title} — ${we.forms.length ? we.forms[0].form + ' · ' : ''}Словарь денди`
+    : ({ dendi: 'Денди → русский', grammar: 'Грамматика', sources: 'Источники', about: 'Как пользоваться' }[h] || 'Словарь денди') + (['dendi', 'grammar', 'sources', 'about'].includes(h) ? ' · Словарь денди' : '');
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === nav));
+  drawAbc(L);
+  if (scrollTo) { const el = document.getElementById(scrollTo); if (el) { el.scrollIntoView({ block: 'start' }); return; } }
+  window.scrollTo(0, 0);
+  if (h !== 'search' && query) { /* оставляем текст в поле */ }
+}
+window.addEventListener('hashchange', route);
+
+const qEl = document.getElementById('q');
+let tmr;
+qEl.addEventListener('input', () => {
+  clearTimeout(tmr);
+  tmr = setTimeout(() => {
+    query = qEl.value;
+    if (query.trim()) { if (location.hash !== '#search') location.hash = 'search'; else { V.innerHTML = vSearch(); drawAbc(null); document.querySelectorAll('#nav a').forEach(a => a.classList.remove('on')); } }
+    else if (location.hash === '#search') location.hash = 'home';
+  }, 150);
+});
+document.getElementById('sform').addEventListener('submit', ev => {
+  ev.preventDefault(); query = qEl.value;
+  const res = query.trim() ? IDX.find(r => r.t === foldRu(query.trim())) : null;
+  if (res) location.hash = 'w' + res.e.n; else if (location.hash !== '#search') location.hash = 'search'; else route();
+});
+document.querySelectorAll('.chars button').forEach(b => b.addEventListener('click', () => {
+  const s = qEl.selectionStart ?? qEl.value.length, e2 = qEl.selectionEnd ?? s;
+  qEl.value = qEl.value.slice(0, s) + b.dataset.ch + qEl.value.slice(e2);
+  qEl.focus(); qEl.setSelectionRange(s + 1, s + 1); qEl.dispatchEvent(new Event('input'));
+}));
+document.getElementById('inex').addEventListener('change', ev => {
+  inEx = ev.target.checked; try { localStorage.setItem('dn-inex', inEx ? '1' : '0'); } catch (_) {}
+  if (location.hash === '#search') route();
+});
+document.getElementById('foot').textContent = `Свод не является нормативным словарём языка. ${D.meta.updated}`;
+route();
+</script>
