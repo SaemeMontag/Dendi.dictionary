@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://saememontag.github.io/Dendi.dictionary/sitemap.xml

@@ -1,6 +1,8 @@
 """Сборка сайта «Словарь денди» из текста Google-документа.
-Использование: python3 build.py <документ.txt или JSON-результат Drive> <страница.html> <выход.html>
-<страница.html> — текущая опубликованная страница (данные в ней заменяются) или шаблон с __DATA__.
+Использование: python3 build.py <документ.txt или JSON Drive> <страница.html> <выход.html> [--site <папка> --base <URL>]
+<страница.html> — страница-фрагмент для claude.ai (данные в ней заменяются) или шаблон с __DATA__.
+--site: дополнительно собрать полноценный сайт для GitHub Pages в <папке>: index.html с заголовком
+для поисковиков, отдельные страницы слов w/<номер>.html, sitemap.xml, robots.txt, assets/site.css.
 Код выхода: 0 — собрано (STATUS CHANGED или UNCHANGED), 2 — документ не прошёл проверки, публиковать нельзя.
 """
 import re, json, sys, base64
@@ -15,7 +17,13 @@ def load_text(path):
             return c
     return raw
 
-src_path, page_path, out = sys.argv[1], sys.argv[2], sys.argv[3]
+args = sys.argv[1:]
+site_dir = base_url = None
+if '--site' in args:
+    i = args.index('--site'); site_dir = args[i + 1]; del args[i:i + 2]
+if '--base' in args:
+    i = args.index('--base'); base_url = args[i + 1].rstrip('/') + '/'; del args[i:i + 2]
+src_path, page_path, out = args[0], args[1], args[2]
 L = [l.rstrip('\r').replace('﻿', '') for l in load_text(src_path).split('\n')]
 
 def idx(text, start=0):
@@ -220,4 +228,9 @@ if not m:
 status = 'UNCHANGED' if m.group(2) == new_json else 'CHANGED'
 page = page[:m.start(2)] + new_json + page[m.end(2):]
 open(out, 'w', encoding='utf-8').write(page)
+if site_dir:
+    import os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sitegen
+    sitegen.build_site(data, page, site_dir, base_url or '/')
+    print('SITE', site_dir)
 print('STATUS', status)
