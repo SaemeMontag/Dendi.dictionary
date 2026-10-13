@@ -66,7 +66,7 @@ def header(prefix):
     <div class="brand"><a href="{prefix}"><span class="name">Денди</span></a><span class="sub">Русско-дендийский словарь · сонгай северного Бенина</span></div>
     <nav class="main">
       <a href="{prefix}#home">Словник</a>
-      <a href="{prefix}#parse">Разбор фразы</a>
+      <a href="{prefix}#parse">Перевод фразы</a>
       <a href="{prefix}#dendi">Денди → русский</a>
       <a href="{prefix}#examples">Примеры</a>
       <a href="{prefix}#grammar">Грамматика</a>

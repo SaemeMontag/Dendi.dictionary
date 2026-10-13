@@ -224,7 +224,7 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
     <div class="brand"><a href="#home"><span class="name">Денди</span></a><span class="sub">Русско-дендийский словарь · сонгай северного Бенина</span></div>
     <nav class="main" id="nav">
       <a href="#home" data-r="home">Словник</a>
-      <a href="#parse" data-r="parse">Разбор фразы</a>
+      <a href="#parse" data-r="parse">Перевод фразы</a>
       <a href="#dendi" data-r="dendi">Денди → русский</a>
       <a href="#examples" data-r="examples">Примеры</a>
       <a href="#grammar" data-r="grammar">Грамматика</a>
@@ -449,7 +449,7 @@ function vAbout() {
     ${D.meta.intro.map(p => `<p>${rich(p)}</p>`).join('')}
     <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона и долготы можно не набирать: <span class="dn">kpaare</span> найдёт <span class="dn">kpaarɛ</span>, а <span class="dn">beeri</span> найдёт и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по полным фразам и их переводам.</div>
     <div class="box"><span class="label">Пометки</span><p><span class="tag info">доп.</span> — дополнительная лексика и грамматика вне списка Сводеша.</p><p style="margin-top:6px"><span class="tag warn">написание не установлено</span> — проверенного письменного эквивалента пока нет; это не означает, что в языке нет такого слова.</p><p style="margin-top:6px"><span class="pidtag">П19</span> — номер полного примера; один пример может стоять в нескольких статьях.</p></div>
-    <div class="box"><span class="label">Разбор фразы</span>На странице <a href="#parse">«Разбор фразы»</a> можно вставить предложение на денди: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря.</div>
+    <div class="box"><span class="label">Перевод фразы</span>На странице <a href="#parse">«Перевод фразы»</a> можно вставить предложение на денди: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря.</div>
   </div>`;
 }
 
@@ -583,9 +583,9 @@ const hlWords = (text, keys) => text.split(/(\s+)/).map(w => keys.includes(foldD
 function vParse() {
   const samples = PIDS.filter((p, i) => i % Math.max(1, Math.floor(PIDS.length / 4)) === 0).slice(0, 4);
   return `<div class="stack" style="gap:18px">
-    <h1>Разбор фразы</h1>
+    <h1>Перевод фразы</h1>
     <p>Вставьте предложение на денди. Каждое слово найдётся в словаре и в разборах полных примеров; ниже появятся похожие фразы с готовым переводом. Тон и долготу можно не набирать.</p>
-    <div class="box warn"><span class="label">Это не переводчик</span>Сайт показывает только значения, которые уже есть в словаре, и ничего не достраивает. Слово может иметь несколько значений, а грамматика денди описана не полностью, поэтому смысл фразы определяет читатель.</div>
+    <div class="box warn"><span class="label">Как это работает</span>Сайт показывает только значения, которые уже есть в словаре, и ничего не достраивает. Слово может иметь несколько значений, а грамматика денди описана не полностью, поэтому смысл фразы определяет читатель.</div>
     <form id="pform" class="stack" style="gap:8px">
       <label for="ptext" class="label">Фраза на денди</label>
       <textarea id="ptext" rows="3" class="dn" spellcheck="false" placeholder="Например: N gunda wɛndɛ ba?">${esc(parseText)}</textarea>
@@ -612,7 +612,7 @@ if (document.addEventListener) {
 }
 
 // маршрутизация
-const PAGES = { parse: ['Разбор фразы', vParse], dendi: ['Денди → русский', vDendi], examples: ['Примеры', vExamples], grammar: ['Грамматика', vGrammar], sources: ['Источники', vSources], about: ['Как пользоваться', vAbout] };
+const PAGES = { parse: ['Перевод фразы', vParse], dendi: ['Денди → русский', vDendi], examples: ['Примеры', vExamples], grammar: ['Грамматика', vGrammar], sources: ['Источники', vSources], about: ['Как пользоваться', vAbout] };
 function route() {
   const h = location.hash.slice(1) || 'home';
   let html, nav = '', L = null, scrollTo = null, title = 'Словарь денди', m;
