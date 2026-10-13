@@ -88,13 +88,13 @@ def all_forms(e):
 
 
 def examples_of(e):
-    return [x for v in e['variants'] for x in v['examples']]
+    return [x for v in e['variants'] for x in v['examples']] + list(e.get('linked', []))
 
 
 def entry_desc(e):
     if not e['variants']:
         return f'{e["title"]} на языке денди: практическое написание пока не установлено. Научные указатели для сверки — в словаре денди.'
-    n = len(examples_of(e))
+    n = len({x['pid'] for x in examples_of(e)})
     tail = f'{n} {plural(n, "полный пример", "полных примера", "полных примеров")} с переводом и разбором.' if n else 'Варианты письма с источниками.'
     return f'{e["title"]} на языке денди: {", ".join(all_forms(e))}. {tail}'[:300]
 
@@ -103,25 +103,32 @@ def ext(text, url):
     return f'<a href="{e_(url)}" target="_blank" rel="noopener">{e_(text)}</a>' if url else e_(text)
 
 
-def chips(p):
+def chips(p, links=None, prefix=''):
     items = []
     for seg in re.split(r';\s*', p.rstrip('.')):
         m = re.match(r'^(.+?) — (.+)$', seg)
         if m: items.append([m[1], m[2]])
         elif items: items[-1][1] += '; ' + seg
         else: items.append(['', seg])
+    lk = {w: n for w, n in (links or []) if n}
+    def word(w):
+        if not w: return ''
+        inner = f'<a href="{prefix}{lk[w]}.html">{e_(w)}</a>' if w in lk else e_(w)
+        return f'<span class="gw" lang="ddn">{inner}</span>'
     return '<div class="gloss">' + ''.join(
-        '<span>' + (f'<span class="gw" lang="ddn">{e_(w)}</span>' if w else '') + f'<span class="gg">{e_(g)}</span></span>' for w, g in items) + '</div>'
+        '<span>' + word(w) + f'<span class="gg">{e_(g)}</span></span>' for w, g in items) + '</div>'
 
 
-def ex_card(x, ids, p, pid_entries, here):
+def ex_card(x, ids, p, pid_entries, here, plinks=None, linked=False):
     others = [o for o in pid_entries.get(x['pid'], []) if o is not here]
-    s = (f'<article class="exc"><div class="exh"><span class="pidtag">Пример {x["k"]} · {e_(x["pid"])}</span>'
+    lead = ''.join(f'<p class="small">{link_src(t, ids, p)}</p>' for t in (x.get('lead') or []))
+    tag = e_(x['pid']) if linked else f'Пример {x["k"]} · {e_(x["pid"])}'
+    s = (lead + f'<article class="exc"><div class="exh"><span class="pidtag">{tag}</span>'
          f'<span class="src">{ext(x["source"], x.get("source_url"))}</span></div>'
          f'<p class="dsent" lang="ddn">{e_(x["dendi"])}</p><dl class="exf">'
-         f'<dt>Опубликованный перевод{" <span class=\"tag info\">Синодальный</span>" if x.get("rst") else ""}</dt><dd>{e_(x["pub"])}</dd>'
+         f'<dt>Опубликованный перевод{" <span class=\"tag info\">Синодальный</span>" if x.get("rst") else ""}</dt><dd>{e_(x["pub"]) if x.get("pub") else "<span class=\"muted\">Опубликованного русского перевода нет.</span>"}</dd>'
          f'<dt>Дословный перевод</dt><dd>{e_(x["lit"])}</dd>'
-         f'<dt>Разбор по словам</dt><dd>{chips(x["parse"])}</dd>')
+         f'<dt>Разбор по словам</dt><dd>{chips(x["parse"], (plinks or {}).get(x["pid"]))}</dd>')
     if x.get('note'): s += f'<dt>Примечание</dt><dd>{link_src(x["note"], ids, p)}</dd>'
     s += '</dl>'
     if others:
@@ -134,9 +141,9 @@ def ref_list(refs):
     return '<ul class="refs">' + ''.join(f'<li>{ext(r["t"], r["u"])}</li>' for r in refs) + '</ul>'
 
 
-def entry_html(e, ids, prev, nxt, pid_entries):
+def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
     p = '../'
-    n_ex = len(examples_of(e))
+    n_ex = len({x['pid'] for x in examples_of(e)})
     meta = f'<span>№ {e["n"]}</span>' + (f'<span>Сводеш № {e["swadesh"]}</span>' if e['kind'] == 'swadesh' else '<span class="tag info">дополнительная лексика</span>')
     if len(e['variants']) > 1:
         meta += f'<span>{len(e["variants"])} {plural(len(e["variants"]), "вариант", "варианта", "вариантов")}</span>'
@@ -152,12 +159,18 @@ def entry_html(e, ids, prev, nxt, pid_entries):
         s = '<section class="variant"><div class="vh">' + (f'<span class="vl">{v["label"]}</span>' if v['label'] else '') + f'<span class="vf" lang="ddn">{e_(v["form"])}</span></div>'
         s += ''.join(f'<p>{link_src(n, ids, p)}</p>' for n in v['notes'])
         if v['examples']:
-            s += '<div class="exs">' + ''.join(ex_card(x, ids, p, pid_entries, e) for x in v['examples']) + '</div>'
+            s += '<div class="exs">' + ''.join(ex_card(x, ids, p, pid_entries, e, plinks) for x in v['examples']) + '</div>'
         elif v['status']:
             s += f'<p class="small muted">{e_(v["status"])}</p>'
         if v['refs']:
             s += f'<div class="stack" style="gap:4px"><span class="label">Источники формы и дополнительные контексты · {len(v["refs"])}</span>{ref_list(v["refs"])}</div>'
         parts.append(s + '</section>')
+    if e.get('linked'):
+        parts.append('<section class="variant"><div class="vh"><span class="vf" style="font-family:var(--f-display);font-size:1.15rem">Другие полные примеры с этим словом</span></div>'
+                     '<p class="small muted">Примеры, в разборе которых есть ссылка на эту статью.</p><div class="exs">'
+                     + ''.join(ex_card(x, ids, p, pid_entries, e, plinks, linked=True) for x in e['linked']) + '</div></section>')
+    if e.get('related'):
+        parts.append(f'<p class="small"><span class="muted">Связанные примеры:</span> {link_src(e["related"], ids, p)}</p>')
     if e['extra_refs']:
         parts.append(f'<section class="stack" style="gap:4px"><span class="label">Дополнительные источниковые привязки</span>{ref_list(e["extra_refs"])}</section>')
     if e.get('sci'):
@@ -226,7 +239,7 @@ def build_site(data, page, site_dir, base):
         doc = (head(title, entry_desc(e), url, '../assets/site.css', fonts,
                     extra=f'<script type="application/ld+json">{json.dumps(term, ensure_ascii=False)}</script>')
                + header('../')
-               + f'<main class="wrap"><div class="page">{entry_html(e, ids, prev, nxt, pid_entries)}</div></main>\n'
+               + f'<main class="wrap"><div class="page">{entry_html(e, ids, prev, nxt, pid_entries, data.get('plinks'))}</div></main>\n'
                + '<footer><div class="wrap">Свод не является нормативным словарём языка.'
                + (f' Данные документа на {e_(data.get("built"))}.' if data.get('built') else '')
                + '</div></footer>\n</body>\n</html>\n')

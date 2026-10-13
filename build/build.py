@@ -3,8 +3,8 @@
 Использование:
   python3 build.py <документ> <страница.html> <выход.html> [--site <папка> --base <URL>]
 
-<документ> — выгрузка Google-документа: JSON-результат Google Drive (download_file_content)
-  или файл .html/.txt. Лучше HTML (exportMimeType "text/html"): из него берутся ссылки
+<документ> — папка хранилища Obsidian (читается только, см. vault.py) либо выгрузка
+  Google-документа: JSON-результат Google Drive (download_file_content) или файл .html/.txt. Лучше HTML (exportMimeType "text/html"): из него берутся ссылки
   на страницы источников. Из текстовой выгрузки сайт тоже собирается, но без этих ссылок.
 <страница.html> — страница-фрагмент для claude.ai (данные в ней заменяются) или шаблон с __DATA__.
 --site: дополнительно собрать полноценный сайт для GitHub Pages в <папке>.
@@ -52,9 +52,19 @@ def strip_tags(s):
     return htmlmod.unescape(re.sub(r'<[^>]+>', '', s)).replace('\xa0', ' ')
 
 
-raw = load_raw(src_path)
 LINES = []          # [(текст, ссылка всей строки или '')]
-if re.search(r'<(p|h[1-6])\b', raw[:200000], re.I):
+EXTRA = {}
+if os.path.isdir(src_path):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import vault
+    try:
+        LINES, EXTRA = vault.load(src_path)
+    except vault.VaultError as err:
+        fail_now(f'хранилище: {err}')
+    raw = ''
+else:
+    raw = load_raw(src_path)
+if not LINES and re.search(r'<(p|h[1-6])\b', raw[:200000], re.I):
     body = re.sub(r'(?is)<(style|script|head)\b.*?</\1>', '', raw)
     for _, inner in re.findall(r'(?is)<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>', body):
         text = re.sub(r'\s+', ' ', strip_tags(inner)).strip()
@@ -62,13 +72,14 @@ if re.search(r'<(p|h[1-6])\b', raw[:200000], re.I):
                  for h, t in re.findall(r'(?is)<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', inner)]
         url = next((u for t, u in links if t == text and u.startswith('http')), '')
         LINES.append((text, url))
-else:
+elif not LINES:
     for l in raw.replace('\r', '').split('\n'):
         LINES.append((re.sub(r'\s+', ' ', l.replace('﻿', '')).strip(), ''))
 LINES = [(t.replace('﻿', ''), u) for t, u in LINES]
 L = [t for t, _ in LINES]
 URL = [u if 'docs.google.com/document' not in u else '' for _, u in LINES]
 problems = []
+warnings = []
 
 
 def find(pred, start=0, name=''):
@@ -120,6 +131,8 @@ KIND_EXTRA = 'Дополнительная лексика и грамматик�
 SW_RE = re.compile(r'^Сводеш № (\d+)$')
 FULLN_RE = re.compile(r'^Полных примеров для этого варианта: (\d+)\.$')
 EX_RE = re.compile(r'^Пример (\d+) \((П\d+)\) — (.+)$')
+LINKED_RE = re.compile(r'^Пример по ссылке \((П\d+)\)$')
+LINKED_HEAD = 'Полные примеры по ссылкам исходного разбора'
 EX_FIELDS = [('Денди: ', 'dendi'), ('Источник: ', 'source'), ('Опубликованный русский перевод: ', 'pub'),
              ('Авторский дословный перевод: ', 'lit'), ('Разбор по словам: ', 'parse'), ('Примечание: ', 'note')]
 
@@ -135,13 +148,25 @@ def letter_of(title):
     return '#'
 
 
+def fill_ex(ex, l, i):
+    if l == 'Синодальный перевод — русский параллельный текст':
+        ex['rst'] = True; return True
+    for pre, key in EX_FIELDS:
+        if l.startswith(pre) and key not in ex:
+            ex[key] = l[len(pre):]
+            if key == 'source': ex['source_url'] = URL[i]
+            return True
+    return False
+
+
 def parse_entry(a, b):
     m = HEAD_RE.match(L[a])
-    e = {'n': int(m[1]), 'title': m[2], 'letter': letter_of(m[2]), 'variants': [], 'extra_refs': [], 'stray': []}
+    e = {'n': int(m[1]), 'title': m[2], 'letter': letter_of(m[2]), 'variants': [], 'extra_refs': [], 'linked': [], 'stray': []}
     sw = SW_RE.match(L[a + 1])
     if sw: e.update(kind='swadesh', swadesh=int(sw[1]))
     else: e['kind'] = 'extra'
     var = ex = None
+    pending = []          # пояснение между примерами — относится к следующему примеру
     mode = 'pre'          # pre | var | ex | refs | xrefs
     for i in range(a + 2, b):
         l = L[i]
@@ -154,8 +179,23 @@ def parse_entry(a, b):
             e['sci'] = l[len('Научный указатель: '):]; mode = 'post'; continue
         if l == 'Дополнительные источниковые привязки:':
             mode = 'xrefs'; continue
+        if l == LINKED_HEAD:
+            if pending and var is not None: var['notes'] += pending; pending = []
+            mode = 'linked'; ex = None; continue
+        if l.startswith('Связанные примеры:'):
+            e['related'] = l[len('Связанные примеры:'):].strip(); continue
+        lm = LINKED_RE.match(l)
+        if lm:
+            ex = {'k': len(e['linked']) + 1, 'pid': lm[1], 'head': '', 'rst': False}
+            e['linked'].append(ex); mode = 'lex'; continue
+        if mode == 'lex':
+            if not fill_ex(ex, l, i): e['stray'].append(l)
+            continue
+        if mode == 'linked':
+            e['stray'].append(l); continue
         rm = ROMAN_RE.match(l)
         if rm and mode not in ('ex',) or (rm and mode == 'ex' and ex and all(ex.get(k) for k in ('dendi', 'source', 'lit'))):
+            if pending and var is not None: var['notes'] += pending; pending = []
             var = {'label': rm[1], 'form': rm[2], 'notes': [], 'full': None, 'status': '', 'examples': [], 'refs': []}
             e['variants'].append(var); ex = None; mode = 'var'; continue
         if mode == 'pre':
@@ -172,30 +212,32 @@ def parse_entry(a, b):
             em = EX_RE.match(l)
             if em:
                 ex = {'k': int(em[1]), 'pid': em[2], 'head': em[3], 'rst': False}
+                if pending: ex['lead'] = pending; pending = []
                 var['examples'].append(ex); mode = 'ex'; continue
             if l == 'Источники формы и дополнительные контексты:':
+                if pending: var['notes'] += pending; pending = []
                 mode = 'refs'; ex = None; continue
             if mode == 'ex':
-                if l == 'Синодальный перевод — русский параллельный текст':
-                    ex['rst'] = True; continue
-                for pre, key in EX_FIELDS:
-                    if l.startswith(pre) and key not in ex:
-                        ex[key] = l[len(pre):]
-                        if key == 'source': ex['source_url'] = URL[i]
-                        break
-                else:
-                    e['stray'].append(l)
+                if not fill_ex(ex, l, i):
+                    if ex.get('lit') and ex.get('parse'): pending.append(l)
+                    else: e['stray'].append(l)
                 continue
-            if not var['examples'] and not var['status'] and var['full'] is None:
+            if not var['examples'] and not var['status']:
                 var['notes'].append(l); continue
             e['stray'].append(l); continue
         if mode == 'refs':
             if REF_RE.match(l): var['refs'].append(ref(i)); continue
+            em = EX_RE.match(l)
+            if em and var is not None:
+                warnings.append(f'статья {e["n"]} «{e["title"]}»: {em[2]} стоит после списка источников варианта; принят как пример этого варианта')
+                ex = {'k': int(em[1]), 'pid': em[2], 'head': em[3], 'rst': False}
+                var['examples'].append(ex); mode = 'ex'; continue
             e['stray'].append(l); continue
         if mode == 'xrefs':
             if REF_RE.match(l): e['extra_refs'].append(ref(i)); continue
             e['stray'].append(l); continue
         e['stray'].append(l)
+    if pending: e['stray'] += pending
     return e
 
 
@@ -221,6 +263,7 @@ while j < len(src_lines):
         sources.append({'code': t, 'desc': nxt, 'url': ''}); j += 2
 
 data = {'meta': meta, 'grammar': grammar, 'entries': entries, 'sources': sources, 'rst': rst}
+data.update(EXTRA)
 
 # ---------- проверки ----------
 
@@ -238,13 +281,13 @@ for e in entries:
     for v in e['variants']:
         if v['full'] is not None and v['full'] != len(v['examples']):
             problems.append(f'статья {e["n"]}, вариант {v["form"]}: заявлено полных примеров {v["full"]}, найдено {len(v["examples"])}')
-        for x in v['examples']:
-            miss = [k for k in ('dendi', 'source', 'pub', 'lit', 'parse') if not x.get(k)]
-            if miss: problems.append(f'статья {e["n"]}, пример {x["pid"]}: нет полей {miss}')
-            if x.get('dendi'):
-                if x['pid'] in pid_text and pid_text[x['pid']] != x['dendi']:
-                    problems.append(f'пример {x["pid"]} записан по-разному в разных статьях')
-                pid_text.setdefault(x['pid'], x['dendi'])
+    for x in [x for v in e['variants'] for x in v['examples']] + e['linked']:
+        miss = [k for k in ('dendi', 'source', 'lit', 'parse') if not x.get(k)]
+        if miss: problems.append(f'статья {e["n"]}, пример {x["pid"]}: нет полей {miss}')
+        if x.get('dendi'):
+            if x['pid'] in pid_text and pid_text[x['pid']] != x['dendi']:
+                problems.append(f'пример {x["pid"]} записан по-разному в разных статьях')
+            pid_text.setdefault(x['pid'], x['dendi'])
 if not sources: problems.append('библиография не распознана')
 if not grammar['rules']: problems.append('раздел грамматики не распознан')
 
@@ -254,6 +297,7 @@ summary = {'entries': len(entries), 'swadesh': sum(e['kind'] == 'swadesh' for e 
            'unestablished': sum(1 for e in entries if e.get('unestablished')),
            'links': sum(1 for u in URL if u)}
 print('SUMMARY', json.dumps(summary, ensure_ascii=False))
+for w in warnings: print('WARNING', w)
 if problems:
     print('STATUS FAILED')
     for p in problems[:40]: print(' -', p)

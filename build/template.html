@@ -153,6 +153,7 @@ mark { background: var(--accent-soft); color: inherit; border-radius: 3px; paddi
 .gloss { display: flex; flex-wrap: wrap; gap: 6px 4px; margin-top: 4px; }
 .gloss span { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 3px 8px; background: var(--bg); border-radius: 6px; }
 .gloss .gw { font-family: var(--f-dendi); font-style: italic; }
+.gloss .gw a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .gloss .gg { font-size: .78rem; color: var(--muted); }
 
 /* источники */
@@ -272,7 +273,7 @@ function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 ===
 // варианты, формы, примеры
 const variantForms = v => v.form.split(/[;,]\s+/).map(f => f.replace(/\s*\(.*?\)\s*/g, ' ').trim()).filter(Boolean);
 const allForms = e => [...new Set(e.variants.flatMap(variantForms))];
-const examplesOf = e => e.variants.flatMap(v => v.examples);
+const examplesOf = e => [...e.variants.flatMap(v => v.examples), ...(e.linked || [])];
 const PID = {};   // П → { ex, entries[] }
 E.forEach(e => examplesOf(e).forEach(x => { (PID[x.pid] = PID[x.pid] || { ex: x, entries: [] }); if (!PID[x.pid].entries.includes(e)) PID[x.pid].entries.push(e); }));
 const PIDS = Object.keys(PID).sort((a, b) => +a.slice(1) - +b.slice(1));
@@ -350,19 +351,21 @@ function parseItems(p) {
   });
   return items;
 }
-function parseChips(p) {
+function parseChips(p, pid) {
   const items = parseItems(p);
-  return `<div class="gloss">${items.map(i => `<span>${i.w ? `<span class="gw">${esc(i.w)}</span>` : ''}<span class="gg">${esc(i.g)}</span></span>`).join('')}</div>`;
+  const links = (D.plinks && D.plinks[pid]) || [];
+  items.forEach(it => { const hit = links.find(([w, n]) => n && w === it.w); if (hit) it.n = hit[1]; });
+  return `<div class="gloss">${items.map(i => `<span>${i.w ? `<span class="gw">${i.n && byN[i.n] ? `<a href="#w${i.n}" title="${esc(byN[i.n].title)}">${esc(i.w)}</a>` : esc(i.w)}</span>` : ''}<span class="gg">${esc(i.g)}</span></span>`).join('')}</div>`;
 }
 function exCard(x, here, num) {
   const others = (PID[x.pid]?.entries || []).filter(e => e !== here);
-  return `<article class="exc">
+  return `${here && x.lead ? x.lead.map(t => `<p class="small">${rich(t)}</p>`).join('') : ''}<article class="exc">
     <div class="exh"><span class="pidtag">${num ? `Пример ${num} · ` : ''}${x.pid}</span><span class="src">${extLink(x.source, x.source_url)}</span></div>
     <p class="dsent">${esc(x.dendi)}</p>
     <dl class="exf">
-      <dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${esc(x.pub)}</dd>
+      <dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${x.pub ? esc(x.pub) : '<span class="muted">Опубликованного русского перевода нет.</span>'}</dd>
       <dt>Дословный перевод</dt><dd>${esc(x.lit)}</dd>
-      <dt>Разбор по словам</dt><dd>${parseChips(x.parse)}</dd>
+      <dt>Разбор по словам</dt><dd>${parseChips(x.parse, x.pid)}</dd>
       ${x.note ? `<dt>Примечание</dt><dd>${rich(x.note)}</dd>` : ''}
     </dl>
     ${others.length ? `<p class="small muted">Этот пример есть и в ${plural(others.length, 'статье', 'статьях', 'статьях')}: ${others.map(wordLink).join(', ')}</p>` : ''}
@@ -373,7 +376,7 @@ const refList = refs => `<ul class="refs">${refs.map(r => `<li>${extLink(r.t, r.
 function vWord(n) {
   const e = byN[n]; if (!e) return vHome();
   const idx = E.indexOf(e), prev = E[idx - 1], next = E[idx + 1];
-  const nEx = examplesOf(e).length;
+  const nEx = new Set(examplesOf(e).map(x => x.pid)).size;
   const meta = `<span>№ ${e.n}</span>${e.kind === 'swadesh' ? `<span>Сводеш № ${e.swadesh}</span>` : '<span class="tag info">дополнительная лексика</span>'}`
     + (e.variants.length > 1 ? `<span>${e.variants.length} ${plural(e.variants.length, 'вариант', 'варианта', 'вариантов')}</span>` : '')
     + `<span>${nEx ? `${nEx} ${plural(nEx, 'полный пример', 'полных примера', 'полных примеров')}` : 'полных примеров пока нет'}</span>`;
@@ -392,6 +395,8 @@ function vWord(n) {
     ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
     ${e.meaning ? `<div class="box"><span class="label">Значение и употребление</span>${rich(e.meaning)}</div>` : ''}
     ${vars}
+    ${(e.linked || []).length ? `<section class="variant"><div class="vh"><span class="vf" style="font-family:var(--f-display);font-size:1.15rem">Другие полные примеры с этим словом</span></div><p class="small muted">Примеры, в разборе которых есть ссылка на эту статью.</p><div class="exs">${e.linked.map(x => exCard(x, e)).join('')}</div></section>` : ''}
+    ${e.related ? `<p class="small"><span class="muted">Связанные примеры:</span> ${rich(e.related)}</p>` : ''}
     ${e.extra_refs.length ? `<section class="stack" style="gap:4px"><span class="label">Дополнительные источниковые привязки</span>${refList(e.extra_refs)}</section>` : ''}
     ${relHtml}
     ${e.sci ? `<section class="stack small"><span class="label">Для сверки</span><p><span class="muted">Научный указатель.</span> ${rich(e.sci)}</p></section>` : ''}
