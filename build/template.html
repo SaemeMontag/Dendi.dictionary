@@ -459,7 +459,7 @@ function vAbout() {
     ${D.meta.intro.map(p => `<p>${rich(p)}</p>`).join('')}
     <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона и долготы можно не набирать: <span class="dn">kpaare</span> найдёт <span class="dn">kpaarɛ</span>, а <span class="dn">beeri</span> найдёт и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по полным фразам и их переводам.</div>
     <div class="box"><span class="label">Пометки</span><p><span class="tag info">доп.</span> — дополнительная лексика и грамматика вне списка Сводеша.</p><p style="margin-top:6px"><span class="tag warn">написание не установлено</span> — проверенного письменного эквивалента пока нет; это не означает, что в языке нет такого слова.</p><p style="margin-top:6px"><span class="pidtag">П19</span> — номер полного примера; один пример может стоять в нескольких статьях.</p></div>
-    <div class="box"><span class="label">Перевод фразы</span>На странице <a href="#parse">«Перевод фразы»</a> можно вставить предложение на денди или по-русски: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря.</div>
+    <div class="box"><span class="label">Перевод фразы</span>На странице <a href="#parse">«Перевод фразы»</a> можно вставить предложение на денди или по-русски: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря. Русские слова понимаются в любой форме (падеж, лицо, время, повелительное наклонение) по морфологическому словарю <a href="http://opencorpora.org" target="_blank" rel="noopener">OpenCorpora</a> (CC BY-SA) с помощью библиотеки <a href="https://github.com/deNULL/Az.js" target="_blank" rel="noopener">Az.js</a>.</div>
   </div>`;
 }
 
@@ -480,10 +480,12 @@ function vSearch() {
   const q = query.trim();
   if (!q) return vHome();
   const qr = foldRu(q), qk = fold(q);
+  const qRu = isRu(q) ? ruWords(q).map(w => ruKeys(w, false)) : [];
   const out = [];
   IDX.forEach(r => {
     let score = 0, hitForm = null; const hitEx = [];
     if (r.t === qr) score = 100; else if (r.t.startsWith(qr)) score = 80; else if (r.t.includes(qr)) score = 60;
+    if (score < 70 && qRu.length && qRu.every(ks => ks.some(k => TITLE_KEYS.get(r.e).has(k)))) score = 70;
     r.forms.forEach(f => {
       let s = 0;
       if (f.k === qk) s = 95; else if (f.k.startsWith(qk)) s = 75; else if (qk.length > 2 && f.k.includes(qk)) s = 50;
@@ -607,49 +609,81 @@ function ruStem(word) {
 }
 const ruWords = s => (s.match(/[а-яё]+/gi) || []);
 const isRu = s => /[а-яё]/i.test(s);
-const RU_TITLE = new Map();     // основа → статьи
-E.forEach(e => ruWords(e.title.replace(/\(.*?\)/g, ' ')).forEach(w => {
-  if (w.toLowerCase() === 'либо') return;
-  const k = ruStem(w); if (!RU_TITLE.has(k)) RU_TITLE.set(k, []);
-  if (!RU_TITLE.get(k).includes(e)) RU_TITLE.get(k).push(e);
-}));
-const RU_GLOSS = new Map();     // основа → {dendi-слово, значение, П}
+const ruNorm = w => w.toLowerCase().replace(/ё/g, 'е');
+// формы → начальные формы (из словаря OpenCorpora, собирается при сборке сайта)
+const RU_FORMS = new Map();
+if (D.ru) Object.entries(D.ru).forEach(([lemma, enc]) => {
+  const bar = enc.indexOf('|'), pre = enc.slice(0, bar);
+  enc.slice(bar + 1).split(',').forEach(suf => {
+    const f = pre + suf; if (!RU_FORMS.has(f)) RU_FORMS.set(f, []);
+    const a = RU_FORMS.get(f); if (!a.includes(lemma)) a.push(lemma);
+  });
+});
+// ключи слова: начальные формы; если слова нет в таблице — основа (запасной путь)
+function ruKeys(word, isHeadword) {
+  const w = ruNorm(word);
+  if (isHeadword && D.ru && D.ru[w]) return [w];
+  return RU_FORMS.get(w) || ['~' + ruStem(w)];
+}
+const indexKeys = (word, isHeadword) => [...new Set([...ruKeys(word, isHeadword), '~' + ruStem(word)])];
+const lemmaHint = word => { const ls = RU_FORMS.get(ruNorm(word)); return ls && !(ls.length === 1 && ls[0] === ruNorm(word)) ? ls.join(' / ') : ''; };
+const RU_TITLE = new Map(), TITLE_KEYS = new Map();
+E.forEach(e => {
+  const ks = new Set();
+  ruWords(e.title.replace(/\(.*?\)/g, ' ')).forEach(w => {
+    if (w.toLowerCase() === 'либо') return;
+    indexKeys(w, true).forEach(k => {
+      ks.add(k);
+      if (!RU_TITLE.has(k)) RU_TITLE.set(k, []);
+      if (!RU_TITLE.get(k).includes(e)) RU_TITLE.get(k).push(e);
+    });
+  });
+  TITLE_KEYS.set(e, ks);
+});
+const RU_GLOSS = new Map();
 PIDS.forEach(p => parseItems(PID[p].ex.parse).forEach(({ w, g }) => {
   if (!w) return;
   const core = g.split(/[;,(]/)[0].replace(/^\s*здесь\s+/, '').trim();
-  ruWords(core).forEach(rw => {
-    const k = ruStem(rw); if (!RU_GLOSS.has(k)) RU_GLOSS.set(k, new Map());
+  ruWords(core).forEach(rw => indexKeys(rw, true).forEach(k => {
+    if (!RU_GLOSS.has(k)) RU_GLOSS.set(k, new Map());
     const m = RU_GLOSS.get(k), key = w + '|' + core.toLowerCase();
     if (!m.has(key)) m.set(key, { w, gloss: core, pids: [] });
     if (!m.get(key).pids.includes(p)) m.get(key).pids.push(p);
-  });
+  }));
 }));
-const RU_EX = PIDS.map(p => { const x = PID[p].ex; return { p, x, stems: new Set(ruWords(x.lit + ' ' + x.pub).map(ruStem)) }; });
+const RU_EX = PIDS.map(p => {
+  const x = PID[p].ex, keys = new Set();
+  ruWords((x.lit || '') + ' ' + (x.pub || '')).forEach(w => indexKeys(w, false).forEach(k => keys.add(k)));
+  return { p, x, keys };
+});
+const collect = (map, keys) => { const out = []; keys.forEach(k => (map.get(k) || []).forEach(v => { if (!out.includes(v)) out.push(v); })); return out; };
 function ruTokCard(word) {
-  const k = ruStem(word);
-  const es = RU_TITLE.get(k) || [], gs = RU_GLOSS.has(k) ? [...RU_GLOSS.get(k).values()] : [];
+  const keys = ruKeys(word, false);
+  const es = collect(RU_TITLE, keys);
+  const gs = []; keys.forEach(k => RU_GLOSS.has(k) && RU_GLOSS.get(k).forEach(v => { if (!gs.includes(v)) gs.push(v); }));
   const parts = [];
   if (es.length) parts.push(`<div class="pblk"><span class="plab">В словаре</span><ul>${es.slice(0, 5).map(e => `<li>${wordLink(e)}${e.variants.length ? ` — <span class="dn">${esc(e.variants.map(v => v.form).slice(0, 3).join(', '))}</span>` : ' <span class="muted small">написание не установлено</span>'}</li>`).join('')}${es.length > 5 ? `<li class="muted small">и ещё ${es.length - 5}</li>` : ''}</ul></div>`);
   if (gs.length) parts.push(`<div class="pblk"><span class="plab">В разборах примеров</span><ul>${gs.slice(0, 4).map(g => `<li><span class="dn">${esc(g.w)}</span> — ${esc(g.gloss)} <span class="small">${g.pids.slice(0, 3).map(p => `<a class="pid" href="#p${p.slice(1)}">${p}</a>`).join(' ')}${g.pids.length > 3 ? ' …' : ''}</span></li>`).join('')}${gs.length > 4 ? `<li class="muted small">и ещё ${gs.length - 4}</li>` : ''}</ul></div>`);
-  const found = parts.length > 0;
-  return { found, html: `<div class="ptok${found ? '' : ' unk'}"><span class="ptw ru">${esc(word)}</span>${found ? parts.join('') : '<p class="small muted">Не найдено. Попробуйте начальную форму: «бояться», а не «боюсь».</p>'}</div>` };
+  const found = parts.length > 0, hint = lemmaHint(word);
+  return { found, html: `<div class="ptok${found ? '' : ' unk'}"><span class="ptw ru">${esc(word)}</span>${hint ? `<span class="small muted">начальная форма: ${esc(hint)}</span>` : ''}${found ? parts.join('') : '<p class="small muted">Этого слова нет ни в заголовках статей, ни в разборах примеров.</p>'}</div>` };
 }
 function ruResults(text) {
   const words = ruWords(text);
   if (!words.length) return '<p class="muted">В тексте нет русских слов.</p>';
   const cards = words.map(ruTokCard), ok = cards.filter(c => c.found).length;
   const fq = fold(text);
-  const exact = PIDS.find(p => fold(PID[p].ex.lit) === fq || fold(PID[p].ex.pub) === fq);
-  const q = new Set(words.map(ruStem));
+  const exact = PIDS.find(p => fold(PID[p].ex.lit || '') === fq || (PID[p].ex.pub && fold(PID[p].ex.pub) === fq));
+  const qw = words.map(w => ({ w, keys: ruKeys(w, false) }));
+  const allQ = new Set(qw.flatMap(q => q.keys));
   const sim = exact ? [] : RU_EX.map(r => {
-    const common = [...q].filter(s => r.stems.has(s));
-    return { ...r, common, score: common.reduce((s, w) => s + (w.length <= 2 ? 0.3 : Math.min(w.length, 5)), 0) / Math.sqrt(r.stems.size + 1) };
-  }).filter(r => r.common.length).sort((a, b) => b.score - a.score).slice(0, 5);
-  const hlRu = (t, keys) => t.replace(/[а-яё]+/gi, w => keys.includes(ruStem(w)) ? `<mark>${w}</mark>` : w);
+    const hit = qw.filter(q => q.keys.some(k => r.keys.has(k)));
+    return { ...r, hit, score: hit.reduce((s, q) => s + (q.w.length <= 2 ? 0.3 : Math.min(q.w.length, 5)), 0) / Math.sqrt(r.keys.size + 1) };
+  }).filter(r => r.hit.length).sort((a, b) => b.score - a.score).slice(0, 5);
+  const hlRu = t => t.replace(/[а-яё]+/gi, w => ruKeys(w, false).some(k => allQ.has(k)) ? `<mark>${w}</mark>` : w);
   return `<p class="statline"><span>Найдено: <b>${ok}</b> из ${words.length}</span>${words.length - ok ? `<span>не найдено: <b>${words.length - ok}</b></span>` : ''}</p>
     ${exact ? `<div class="box"><span class="label">Эта фраза есть в словаре целиком</span>Ниже её полный пример на денди с переводами и разбором.</div>${exCard(PID[exact].ex, null)}` : ''}
-    ${sim.length ? `<section class="stack"><h2>Как это сказано в примерах</h2><p class="small muted">Полные фразы на денди, в переводе которых есть ваши слова. Это проверенные цитаты, а не перевод вашей фразы.</p>
-      <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${esc(r.x.dendi)}</span></span><span class="rx">${hlRu(esc(r.x.lit), r.common)}</span></li>`).join('')}</ul></section>` : ''}
+    ${sim.length ? `<section class="stack"><h2>Как это сказано в примерах</h2><p class="small muted">Полные фразы на денди, в переводе которых есть ваши слова в любой форме. Это проверенные цитаты, а не перевод вашей фразы.</p>
+      <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${esc(r.x.dendi)}</span></span><span class="rx">${hlRu(esc(r.x.lit))}</span></li>`).join('')}</ul></section>` : ''}
     <section class="stack"><h2>Слова</h2><div class="ptoks">${cards.map(c => c.html).join('')}</div></section>`;
 }
 

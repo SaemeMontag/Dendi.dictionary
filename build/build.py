@@ -265,6 +265,39 @@ while j < len(src_lines):
 data = {'meta': meta, 'grammar': grammar, 'entries': entries, 'sources': sources, 'rst': rst}
 data.update(EXTRA)
 
+# ---------- морфология русских слов (OpenCorpora через Az.js, см. build/vendor/az) ----------
+
+def ru_vocab(d):
+    words = set()
+    def add(t):
+        words.update(w.lower() for w in re.findall(r'[А-Яа-яЁё]+', t or ''))
+    for e in d['entries']:
+        add(re.sub(r'\(.*?\)', ' ', e['title']))
+        for x in [x for v in e['variants'] for x in v['examples']] + e.get('linked', []):
+            add(x.get('lit')); add(x.get('pub'))
+            for seg in (x.get('parse') or '').split(';'):
+                mm = re.match(r'^\s*(.+?) — (.+)$', seg)
+                if mm: add(re.split(r'[,(]', mm[2])[0])
+    return sorted(words)
+
+
+def ru_morph(d):
+    import subprocess
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'morph.js')
+    try:
+        r = subprocess.run(['node', script], input=json.dumps(ru_vocab(d), ensure_ascii=False),
+                           capture_output=True, text=True, timeout=900)
+    except Exception as err:
+        return None, f'морфология не собрана ({err}); «Перевод фразы» будет искать по основе слова'
+    if r.returncode != 0:
+        return None, 'морфология не собрана: ' + (r.stderr or '').strip()[:200]
+    return json.loads(r.stdout), None
+
+
+_ru, _err = ru_morph(data)
+if _ru: data['ru'] = _ru
+else: warnings.append(_err)
+
 # ---------- проверки ----------
 
 if len(entries) < 150: problems.append(f'статей только {len(entries)}')
@@ -295,7 +328,7 @@ n_ex = len(pid_text)
 summary = {'entries': len(entries), 'swadesh': sum(e['kind'] == 'swadesh' for e in entries),
            'extra': sum(e['kind'] == 'extra' for e in entries), 'unique_examples': n_ex,
            'unestablished': sum(1 for e in entries if e.get('unestablished')),
-           'links': sum(1 for u in URL if u)}
+           'links': sum(1 for u in URL if u), 'ru_lemmas': len(data.get('ru') or {})}
 print('SUMMARY', json.dumps(summary, ensure_ascii=False))
 for w in warnings: print('WARNING', w)
 if problems:
