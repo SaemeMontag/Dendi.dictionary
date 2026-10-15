@@ -195,6 +195,11 @@ footer { border-top: 1px solid var(--line); padding-block: 18px 28px; color: var
 .refs li { white-space: nowrap; }
 a.pid { font-family: var(--f-mono); font-size: .88em; }
 .focus .exc { outline: 2px solid var(--accent); }
+.md { display: flex; flex-direction: column; gap: 10px; }
+.md h2 { font-size: 1.25rem; margin-top: 8px; } .md h3 { font-size: 1.05rem; margin-top: 4px; }
+.mdl { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; }
+.gnote { padding-top: 14px; border-top: 1px solid var(--line); scroll-margin-top: 140px; }
+.srcs .t.md { gap: 6px; }
 /* разбор фразы */
 #ptext { font: inherit; font-family: var(--f-dendi); font-size: 1.2rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 100%; resize: vertical; }
 #ptext:focus { outline: 2px solid var(--accent); border-color: transparent; }
@@ -215,6 +220,10 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .pdir + .pdir { border-left: 1px solid var(--line); }
 .pdir.on { background: var(--accent); color: var(--paper); }
 .ptw.ru { font-family: var(--f-body); }
+.palt { border-top: 1px dashed var(--line); padding-top: 6px; font-size: .92rem; }
+.palt summary { cursor: pointer; color: var(--muted); }
+.palt[open] summary { margin-bottom: 4px; }
+.pick { font: inherit; font-size: .85rem; margin-top: 6px; padding: 3px 10px; border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 6px; cursor: pointer; }
 .plab { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 #view [id^="p"] { scroll-margin-top: 140px; }
 @media (max-width: 560px) { .exf { grid-template-columns: 1fr; gap: 2px; } .exf dd { margin-bottom: 6px; } .refs li { white-space: normal; } }

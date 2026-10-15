@@ -16,22 +16,49 @@ def plural(n, a, b, c):
     return a if m10 == 1 and m100 != 11 else b if 2 <= m10 <= 4 and not 12 <= m100 <= 14 else c
 
 
-def src_ids(sources):
+def src_ids(sources, rst=None):
     ids = {}
-    for i, s in enumerate(sources):
-        for c in re.split(r'[ /—]+', s['code']):
-            if re.fullmatch(r'[A-Z0-9]+', c):
-                ids[c] = f'src{i}'
-        if s['code'].startswith('T68'): ids['T68/72'] = f'src{i}'
-    ids['RST'] = 'srcrst'
+    for s in sources:
+        for c in re.split(r'\s+[—/]\s+|\s*/\s*|\s+', s['code']):
+            if re.fullmatch(r'[A-Z][A-Z0-9-]*', c) and c not in ids:
+                ids[c] = s['id']
+        if s['code'].startswith('T68'): ids['T68/72'] = s['id']
+    if rst: ids['RST'] = rst['id']
     return ids
 
 
+MARK = re.compile(r'⟦([a-z]):([^|⟧]*)\|([^⟧]*)⟧')
+
+
+def _fmt(t):
+    t = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t)
+    return re.sub(r'(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)', r'\1<i>\2</i>', t)
+
+
 def link_src(text, ids, prefix):
-    t = e_(text)
-    t = re.sub(r'П(\d+)', lambda m: f'<a class="pid" href="{prefix}#p{m[1]}">П{m[1]}</a>', t)
-    return re.sub(r'\b(T68/72|NT18|NT95|AL\d+|COV|CAL|CFA|ANT|SM19|N78|N89|G88|GYK|RST|AT|AZ|H)\b',
-                  lambda m: f'<a class="code" href="{prefix}#{ids[m[1]]}">{m[1]}</a>' if m[1] in ids else m[1], t)
+    """Текст с метками ⟦…⟧ → HTML для страницы слова (prefix — путь к корню сайта, например '../')."""
+    codes = sorted(ids, key=len, reverse=True)
+    code_re = re.compile(r'(?<![\wА-Яа-яЁё-])(' + '|'.join(re.escape(c) for c in codes) + r')(?![\wА-Яа-яЁё-])') if codes else None
+
+    def plain(t):
+        t = e_(t)
+        t = re.sub(r'П(\d+)', lambda m: f'<a class="pid" href="{prefix}#p{m[1]}">П{m[1]}</a>', t)
+        if code_re:
+            t = code_re.sub(lambda m: f'<a class="code" href="{prefix}#{ids[m[1]]}">{m[1]}</a>', t)
+        return _fmt(t)
+    out, last = '', 0
+    for m in MARK.finditer(text or ''):
+        out += plain(text[last:m.start()]); last = m.end()
+        k, ref, t = m[1], m[2], _fmt(e_(m[3]))
+        href = {'w': f'{ref}.html', 'p': f'{prefix}#p{ref}', 's': f'{prefix}#{ref}', 'g': f'{prefix}#gr-{ref}',
+                'a': f'{prefix}#about'}.get(k)
+        if k == 'u':
+            out += f'<a href="{e_(ref)}" target="_blank" rel="noopener">{t}</a>'
+        elif href:
+            out += f'<a href="{e_(href)}">{t}</a>'
+        else:
+            out += t
+    return out + plain((text or '')[last:])
 
 
 def head(title, desc, canonical, css_href, fonts_href, inline_css='', extra=''):
@@ -120,16 +147,25 @@ def chips(p, links=None, prefix=''):
 
 
 def ex_card(x, ids, p, pid_entries, here, plinks=None, linked=False):
+    rst_tag = ' <span class="tag info">Синодальный</span>' if x.get('rst') else ''
+    if x.get('pub'):
+        pub_html = e_(x['pub'])
+        if x.get('pub_url'):
+            lab = 'текст' if x.get('rst') else e_(x.get('pub_label') or 'текст')
+            pub_html += f' <a class="small" href="{e_(x["pub_url"])}" target="_blank" rel="noopener">{lab}</a>'
+    else:
+        pub_html = '<span class="muted">Опубликованного русского перевода нет.</span>'
     others = [o for o in pid_entries.get(x['pid'], []) if o is not here]
     lead = ''.join(f'<p class="small">{link_src(t, ids, p)}</p>' for t in (x.get('lead') or []))
     tag = e_(x['pid']) if linked else f'Пример {x["k"]} · {e_(x["pid"])}'
     s = (lead + f'<article class="exc"><div class="exh"><span class="pidtag">{tag}</span>'
          f'<span class="src">{ext(x["source"], x.get("source_url"))}</span></div>'
          f'<p class="dsent" lang="ddn">{e_(x["dendi"])}</p><dl class="exf">'
-         f'<dt>Опубликованный перевод{" <span class=\"tag info\">Синодальный</span>" if x.get("rst") else ""}</dt><dd>{e_(x["pub"]) if x.get("pub") else "<span class=\"muted\">Опубликованного русского перевода нет.</span>"}</dd>'
+         f'<dt>Опубликованный перевод{rst_tag}</dt><dd>{pub_html}</dd>'
          f'<dt>Дословный перевод</dt><dd>{e_(x["lit"])}</dd>'
          f'<dt>Разбор по словам</dt><dd>{chips(x["parse"], (plinks or {}).get(x["pid"]))}</dd>')
     if x.get('note'): s += f'<dt>Примечание</dt><dd>{link_src(x["note"], ids, p)}</dd>'
+    if x.get('extra'): s += '<dt>Дополнительно</dt><dd>' + '<br>'.join(link_src(t, ids, p) for t in x['extra']) + '</dd>'
     s += '</dl>'
     if others:
         s += f'<p class="small muted">Этот пример есть и в {plural(len(others), "статье", "статьях", "статьях")}: ' + ', '.join(
@@ -155,13 +191,14 @@ def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
         parts.append(f'<div class="box warn"><span class="label">Написание не установлено</span>{e_(e["unestablished"])}</div>')
     if e.get('meaning'):
         parts.append(f'<div class="box"><span class="label">Значение и употребление</span>{link_src(e["meaning"], ids, p)}</div>')
+    parts += [f'<p>{link_src(t, ids, p)}</p>' for t in e.get('notes', [])]
     for v in e['variants']:
         s = '<section class="variant"><div class="vh">' + (f'<span class="vl">{v["label"]}</span>' if v['label'] else '') + f'<span class="vf" lang="ddn">{e_(v["form"])}</span></div>'
         s += ''.join(f'<p>{link_src(n, ids, p)}</p>' for n in v['notes'])
         if v['examples']:
             s += '<div class="exs">' + ''.join(ex_card(x, ids, p, pid_entries, e, plinks) for x in v['examples']) + '</div>'
-        elif v['status']:
-            s += f'<p class="small muted">{e_(v["status"])}</p>'
+        else:
+            s += f'<p class="small muted">{e_(v["status"] or "Полного примера с дословным разбором пока нет.")}</p>'
         if v['refs']:
             s += f'<div class="stack" style="gap:4px"><span class="label">Источники формы и дополнительные контексты · {len(v["refs"])}</span>{ref_list(v["refs"])}</div>'
         parts.append(s + '</section>')
@@ -198,7 +235,7 @@ def static_index(entries):
 
 def build_site(data, page, site_dir, base):
     entries = data['entries']
-    ids = src_ids(data['sources'])
+    ids = src_ids(data['sources'], data.get('rst'))
     style = re.search(r'<style>(.*?)</style>', page, re.S).group(1)
     fonts = re.search(r'<link rel="stylesheet" href="(https://fonts\.googleapis\.com[^"]+)">', page).group(1)
     os.makedirs(os.path.join(site_dir, 'assets'), exist_ok=True)

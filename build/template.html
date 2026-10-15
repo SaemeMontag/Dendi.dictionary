@@ -200,6 +200,11 @@ footer { border-top: 1px solid var(--line); padding-block: 18px 28px; color: var
 .refs li { white-space: nowrap; }
 a.pid { font-family: var(--f-mono); font-size: .88em; }
 .focus .exc { outline: 2px solid var(--accent); }
+.md { display: flex; flex-direction: column; gap: 10px; }
+.md h2 { font-size: 1.25rem; margin-top: 8px; } .md h3 { font-size: 1.05rem; margin-top: 4px; }
+.mdl { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; }
+.gnote { padding-top: 14px; border-top: 1px solid var(--line); scroll-margin-top: 140px; }
+.srcs .t.md { gap: 6px; }
 /* разбор фразы */
 #ptext { font: inherit; font-family: var(--f-dendi); font-size: 1.2rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 100%; resize: vertical; }
 #ptext:focus { outline: 2px solid var(--accent); border-color: transparent; }
@@ -220,6 +225,10 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .pdir + .pdir { border-left: 1px solid var(--line); }
 .pdir.on { background: var(--accent); color: var(--paper); }
 .ptw.ru { font-family: var(--f-body); }
+.palt { border-top: 1px dashed var(--line); padding-top: 6px; font-size: .92rem; }
+.palt summary { cursor: pointer; color: var(--muted); }
+.palt[open] summary { margin-bottom: 4px; }
+.pick { font: inherit; font-size: .85rem; margin-top: 6px; padding: 3px 10px; border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 6px; cursor: pointer; }
 .plab { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 #view [id^="p"] { scroll-margin-top: 140px; }
 @media (max-width: 560px) { .exf { grid-template-columns: 1fr; gap: 2px; } .exf dd { margin-bottom: 6px; } .refs li { white-space: normal; } }
@@ -282,18 +291,45 @@ const ST = {
   ex: PIDS.length, withEx: E.filter(e => examplesOf(e).length).length, unest: E.filter(e => e.unestablished).length
 };
 
-// источники → якоря
+// источники → якоря; коды из библиографии
 const SRC_IDS = {};
-D.sources.forEach((s, i) => {
-  s.id = 'src' + i;
-  s.code.split(/[ \/—]+/).filter(c => /^[A-Z0-9]+$/.test(c)).forEach(c => SRC_IDS[c] = s.id);
+const addCode = (c, id) => { if (c && /^[A-Z][A-Z0-9-]*$/.test(c) && !SRC_IDS[c]) SRC_IDS[c] = id; };
+D.sources.forEach(s => {
+  s.code.split(/\s+[—\/]\s+|\s*\/\s*|\s+/).forEach(c => addCode(c, s.id));
   if (s.code.startsWith('T68')) SRC_IDS['T68/72'] = s.id;
 });
-if (D.rst) SRC_IDS['RST'] = 'srcrst';
-const CODE_RE = /\b(T68\/72|NT18|NT95|AL\d+|COV|CAL|CFA|ANT|SM19|N78|N89|G88|GYK|RST|AT|AZ|H)\b/g;
-const rich = s => esc(s)
+if (D.rst) SRC_IDS['RST'] = D.rst.id;
+const CODE_RE = new RegExp('(?<![\\wА-Яа-яЁё-])(' + Object.keys(SRC_IDS).sort((a, b) => b.length - a.length).map(c => c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|') + ')(?![\\wА-Яа-яЁё-])', 'g');
+const fmt = t => t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<i>$2</i>');
+const plainRich = t => fmt(esc(t)
   .replace(CODE_RE, m => SRC_IDS[m] ? `<a class="code" href="#${SRC_IDS[m]}" title="Описание источника">${m}</a>` : m)
-  .replace(/П(\d+)/g, (m, d) => PID['П' + d] ? `<a class="pid" href="#p${d}" title="Полный пример ${m}">${m}</a>` : m);
+  .replace(/П(\d+)/g, (m, d) => PID['П' + d] ? `<a class="pid" href="#p${d}" title="Полный пример ${m}">${m}</a>` : m));
+const MARK = /⟦([a-z]):([^|⟧]*)\|([^⟧]*)⟧/g;
+function rich(s) {
+  s = String(s ?? ''); let out = '', last = 0, m;
+  MARK.lastIndex = 0;
+  while ((m = MARK.exec(s))) {
+    out += plainRich(s.slice(last, m.index)); last = MARK.lastIndex;
+    const [, k, ref, text] = m, t = fmt(esc(text));
+    if (k === 'w' && byN[+ref]) out += `<a href="#w${ref}" title="${esc(byN[+ref].title)}">${t}</a>`;
+    else if (k === 'p' && PID['П' + ref]) out += `<a class="pid" href="#p${ref}">${t}</a>`;
+    else if (k === 's') out += `<a href="#${esc(ref)}">${t}</a>`;
+    else if (k === 'g') out += `<a href="#gr-${esc(ref)}">${t}</a>`;
+    else if (k === 'a') out += `<a href="#about">${t}</a>`;
+    else if (k === 'u') out += `<a href="${esc(ref)}" target="_blank" rel="noopener">${t}</a>`;
+    else out += t;
+  }
+  return out + plainRich(s.slice(last));
+}
+function blocks(bs) {
+  let out = '', ul = false;
+  bs.forEach(b => {
+    if (b.t === 'li') { if (!ul) { out += '<ul class="mdl">'; ul = true; } out += `<li>${rich(b.x)}</li>`; return; }
+    if (ul) { out += '</ul>'; ul = false; }
+    out += b.t === 'p' ? `<p>${rich(b.x)}</p>` : `<${b.t}>${rich(b.x)}</${b.t}>`;
+  });
+  return out + (ul ? '</ul>' : '');
+}
 const extLink = (text, url) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
 
 const formIndex = {};
@@ -363,10 +399,11 @@ function exCard(x, here, num) {
     <div class="exh"><span class="pidtag">${num ? `Пример ${num} · ` : ''}${x.pid}</span><span class="src">${extLink(x.source, x.source_url)}</span></div>
     <p class="dsent">${esc(x.dendi)}</p>
     <dl class="exf">
-      <dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${x.pub ? esc(x.pub) : '<span class="muted">Опубликованного русского перевода нет.</span>'}</dd>
+      <dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${x.pub ? esc(x.pub) + (x.pub_url ? ` <a class="small" href="${esc(x.pub_url)}" target="_blank" rel="noopener">${x.rst ? 'текст' : esc(x.pub_label || 'текст')}</a>` : '') : '<span class="muted">Опубликованного русского перевода нет.</span>'}</dd>
       <dt>Дословный перевод</dt><dd>${esc(x.lit)}</dd>
       <dt>Разбор по словам</dt><dd>${parseChips(x.parse, x.pid)}</dd>
       ${x.note ? `<dt>Примечание</dt><dd>${rich(x.note)}</dd>` : ''}
+      ${(x.extra || []).length ? `<dt>Дополнительно</dt><dd>${x.extra.map(rich).join('<br>')}</dd>` : ''}
     </dl>
     ${others.length ? `<p class="small muted">Этот пример есть и в ${plural(others.length, 'статье', 'статьях', 'статьях')}: ${others.map(wordLink).join(', ')}</p>` : ''}
   </article>`;
@@ -383,7 +420,7 @@ function vWord(n) {
   const vars = e.variants.map(v => `<section class="variant">
       <div class="vh">${v.label ? `<span class="vl">${v.label}</span>` : ''}<span class="vf">${esc(v.form)}</span></div>
       ${v.notes.map(p => `<p>${rich(p)}</p>`).join('')}
-      ${v.examples.length ? `<div class="exs">${v.examples.map(x => exCard(x, e, x.k)).join('')}</div>` : (v.status ? `<p class="small muted">${esc(v.status)}</p>` : '')}
+      ${v.examples.length ? `<div class="exs">${v.examples.map(x => exCard(x, e, x.k)).join('')}</div>` : `<p class="small muted">${esc(v.status || 'Полного примера с дословным разбором пока нет.')}</p>`}
       ${v.refs.length ? `<div class="stack" style="gap:4px"><span class="label">Источники формы и дополнительные контексты · ${v.refs.length}</span>${refList(v.refs)}</div>` : ''}
     </section>`).join('');
   const rel = new Map();
@@ -394,6 +431,7 @@ function vWord(n) {
     <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div></div>
     ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
     ${e.meaning ? `<div class="box"><span class="label">Значение и употребление</span>${rich(e.meaning)}</div>` : ''}
+    ${(e.notes || []).map(t => `<p>${rich(t)}</p>`).join('')}
     ${vars}
     ${(e.linked || []).length ? `<section class="variant"><div class="vh"><span class="vf" style="font-family:var(--f-display);font-size:1.15rem">Другие полные примеры с этим словом</span></div><p class="small muted">Примеры, в разборе которых есть ссылка на эту статью.</p><div class="exs">${e.linked.map(x => exCard(x, e)).join('')}</div></section>` : ''}
     ${e.related ? `<p class="small"><span class="muted">Связанные примеры:</span> ${rich(e.related)}</p>` : ''}
@@ -426,11 +464,12 @@ function vDendi() {
 }
 
 function vGrammar() {
-  const G = D.grammar;
+  const G = D.grammar, idx = G.find(g => g.index), rest = G.filter(g => !g.index);
   return `<div class="stack" style="gap:22px">
-    <h1>${esc(G.title.replace(/^Грамматика:\s*/, '').replace(/^./, c => c.toUpperCase()))}</h1>
-    ${G.intro.map(p => `<p>${rich(p)}</p>`).join('')}
-    <ol class="rules">${G.rules.map(r => `<li><span class="n">${r.n}</span><div class="stack" style="gap:6px"><h3>${esc(r.title)}</h3>${r.paras.map(p => `<p>${rich(p)}</p>`).join('')}${r.refs.length ? refList(r.refs) : ''}</div></li>`).join('')}</ol>
+    <h1>${esc(idx ? idx.title : 'Грамматика')}</h1>
+    ${idx ? `<div class="md">${blocks(idx.blocks)}</div>` : ''}
+    ${rest.length > 1 ? `<nav class="box"><span class="label">Заметки</span><ul class="mdl">${rest.map(g => `<li><a href="#gr-${g.id}">${esc(g.title)}</a></li>`).join('')}</ul></nav>` : ''}
+    ${rest.map(g => `<section class="stack gnote" id="gr-${g.id}"><h2>${esc(g.title)}</h2><div class="md">${blocks(g.blocks)}</div></section>`).join('')}
     <p class="small muted">Номера П ведут к полным примерам с переводами и разбором; все они собраны на странице <a href="#examples">«Примеры»</a>.</p>
   </div>`;
 }
@@ -447,8 +486,7 @@ function vSources(hl) {
       <p class="small muted">Число уникальных полных примеров (П1–П${PIDS.length ? PIDS[PIDS.length - 1].slice(1) : 0}) по источнику фразы. NT95 и NT18 — разные издания одной переводческой традиции.</p>
     </section>
     <section class="stack"><h2>Библиография</h2>
-      <div class="srcs">${D.sources.map(s => `<article id="${s.id}" class="${s.id === hl ? 'hl' : ''}"><span class="c">${esc(s.code)}</span><div class="t"><p>${esc(s.desc)}</p>${s.url ? `<a class="u" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : ''}</div></article>`).join('')}
-      ${D.rst ? `<article id="srcrst" class="${hl === 'srcrst' ? 'hl' : ''}"><span class="c">RST</span><div class="t"><p><b>${esc(D.rst.title)}.</b> ${esc(D.rst.desc)}</p>${D.rst.url ? `<a class="u" href="${esc(D.rst.url)}" target="_blank" rel="noopener">${esc(D.rst.url)}</a>` : ''}</div></article>` : ''}</div>
+      <div class="srcs">${[...D.sources, ...(D.rst ? [D.rst] : [])].map(s => `<article id="${s.id}" class="${s.id === hl ? 'hl' : ''}"><span class="c">${esc(s.code.split(' — ')[0])}</span><div class="t md"><p><b>${esc(s.title)}</b></p>${blocks(s.blocks)}${s.url ? `<a class="u" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : ''}</div></article>`).join('')}</div>
     </section>
   </div>`;
 }
@@ -456,7 +494,7 @@ function vSources(hl) {
 function vAbout() {
   return `<div class="stack" style="gap:18px">
     <h1>Как пользоваться</h1>
-    ${D.meta.intro.map(p => `<p>${rich(p)}</p>`).join('')}
+    <div class="md">${blocks(D.meta.intro)}</div>
     <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона и долготы можно не набирать: <span class="dn">kpaare</span> найдёт <span class="dn">kpaarɛ</span>, а <span class="dn">beeri</span> найдёт и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по полным фразам и их переводам.</div>
     <div class="box"><span class="label">Пометки</span><p><span class="tag info">доп.</span> — дополнительная лексика и грамматика вне списка Сводеша.</p><p style="margin-top:6px"><span class="tag warn">написание не установлено</span> — проверенного письменного эквивалента пока нет; это не означает, что в языке нет такого слова.</p><p style="margin-top:6px"><span class="pidtag">П19</span> — номер полного примера; один пример может стоять в нескольких статьях.</p></div>
     <div class="box"><span class="label">Перевод фразы</span>На странице <a href="#parse">«Перевод фразы»</a> можно вставить предложение на денди или по-русски: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря. Русские слова понимаются в любой форме (падеж, лицо, время, повелительное наклонение) по морфологическому словарю <a href="http://opencorpora.org" target="_blank" rel="noopener">OpenCorpora</a> (CC BY-SA) с помощью библиотеки <a href="https://github.com/deNULL/Az.js" target="_blank" rel="noopener">Az.js</a>.</div>
@@ -610,13 +648,17 @@ function ruStem(word) {
 const ruWords = s => (s.match(/[а-яё]+/gi) || []);
 const isRu = s => /[а-яё]/i.test(s);
 const ruNorm = w => w.toLowerCase().replace(/ё/g, 'е');
-// формы → начальные формы (из словаря OpenCorpora, собирается при сборке сайта)
-const RU_FORMS = new Map();
+// формы → прочтения {лемма, признаки} (словарь OpenCorpora, собирается при сборке сайта)
+const RU_FORMS = new Map();   // форма → [лемма…]
+const RU_READ = new Map();    // форма → Map(лемма → [признаки…])
 if (D.ru) Object.entries(D.ru).forEach(([lemma, enc]) => {
-  const bar = enc.indexOf('|'), pre = enc.slice(0, bar);
-  enc.slice(bar + 1).split(',').forEach(suf => {
-    const f = pre + suf; if (!RU_FORMS.has(f)) RU_FORMS.set(f, []);
-    const a = RU_FORMS.get(f); if (!a.includes(lemma)) a.push(lemma);
+  const [pre, sufs, tg = ''] = enc.split('|'), tl = tg.split(',');
+  sufs.split(',').forEach((suf, i) => {
+    const f = pre + suf;
+    if (!RU_FORMS.has(f)) { RU_FORMS.set(f, []); RU_READ.set(f, new Map()); }
+    if (!RU_FORMS.get(f).includes(lemma)) RU_FORMS.get(f).push(lemma);
+    const tags = (tl[i] || '').split('.').filter(Boolean).map(t => (D.rutags || [])[parseInt(t, 36)]).filter(Boolean);
+    RU_READ.get(f).set(lemma, [...(RU_READ.get(f).get(lemma) || []), ...tags]);
   });
 });
 // ключи слова: начальные формы; если слова нет в таблице — основа (запасной путь)
@@ -626,7 +668,6 @@ function ruKeys(word, isHeadword) {
   return RU_FORMS.get(w) || ['~' + ruStem(w)];
 }
 const indexKeys = (word, isHeadword) => [...new Set([...ruKeys(word, isHeadword), '~' + ruStem(word)])];
-const lemmaHint = word => { const ls = RU_FORMS.get(ruNorm(word)); return ls && !(ls.length === 1 && ls[0] === ruNorm(word)) ? ls.join(' / ') : ''; };
 const RU_TITLE = new Map(), TITLE_KEYS = new Map();
 E.forEach(e => {
   const ks = new Set();
@@ -640,51 +681,149 @@ E.forEach(e => {
   });
   TITLE_KEYS.set(e, ks);
 });
-const RU_GLOSS = new Map();
-PIDS.forEach(p => parseItems(PID[p].ex.parse).forEach(({ w, g }) => {
-  if (!w) return;
-  const core = g.split(/[;,(]/)[0].replace(/^\s*здесь\s+/, '').trim();
-  ruWords(core).forEach(rw => indexKeys(rw, true).forEach(k => {
-    if (!RU_GLOSS.has(k)) RU_GLOSS.set(k, new Map());
-    const m = RU_GLOSS.get(k), key = w + '|' + core.toLowerCase();
-    if (!m.has(key)) m.set(key, { w, gloss: core, pids: [] });
-    if (!m.get(key).pids.includes(p)) m.get(key).pids.push(p);
-  }));
-}));
+const RU_GLOSS = new Map();   // заполняется ниже, после выбора прочтений
 const RU_EX = PIDS.map(p => {
   const x = PID[p].ex, keys = new Set();
   ruWords((x.lit || '') + ' ' + (x.pub || '')).forEach(w => indexKeys(w, false).forEach(k => keys.add(k)));
   return { p, x, keys };
 });
 const collect = (map, keys) => { const out = []; keys.forEach(k => (map.get(k) || []).forEach(v => { if (!out.includes(v)) out.push(v); })); return out; };
-function ruTokCard(word) {
-  const keys = ruKeys(word, false);
+
+// ---------- омоформы: выбор прочтения по контексту ----------
+const POS_RU = { NOUN: 'существительное', ADJF: 'прилагательное', ADJS: 'краткое прилагательное', COMP: 'сравнительная степень',
+  VERB: 'глагол', INFN: 'глагол (инфинитив)', GRND: 'деепричастие', NUMR: 'числительное', ADVB: 'наречие', NPRO: 'местоимение',
+  PRED: 'предикатив', PREP: 'предлог', CONJ: 'союз', PRCL: 'частица', INTJ: 'междометие' };
+const POSSESSIVE = new Set(['мой', 'твой', 'свой', 'наш', 'ваш']);
+const CASES = ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct', 'voct'];
+const PREP_CASES = { в: 'accs loct', во: 'accs loct', на: 'accs loct', с: 'gent ablt accs', со: 'gent ablt accs', к: 'datv', ко: 'datv',
+  по: 'datv accs loct', о: 'loct accs', об: 'loct accs', обо: 'loct', у: 'gent', от: 'gent', до: 'gent', из: 'gent', без: 'gent',
+  для: 'gent', за: 'accs ablt', под: 'accs ablt', над: 'ablt', перед: 'ablt', при: 'loct', через: 'accs', про: 'accs', между: 'ablt',
+  среди: 'gent', около: 'gent', возле: 'gent', после: 'gent', вокруг: 'gent', ради: 'gent', кроме: 'gent' };
+const CLAUSE_OPENERS = new Set(['и', 'а', 'но', 'пожалуйста', 'же']);
+const has = (tag, g) => (' ' + tag + ' ').includes(' ' + g + ' ');
+const posOf = tag => tag.split(' ')[0];
+const POS_ORDER = ['PREP', 'CONJ', 'NPRO', 'VERB', 'INFN', 'NOUN', 'ADJF', 'NUMR', 'ADVB', 'COMP', 'ADJS', 'GRND', 'PRED', 'PRCL', 'INTJ'];
+const mainPos = tags => tags.map(posOf).sort((a, b) => (POS_ORDER.indexOf(a) + 99) % 99 - (POS_ORDER.indexOf(b) + 99) % 99)[0] || '';
+const MODALS = new Set(['хотеть', 'мочь', 'смочь', 'уметь', 'начать', 'начинать', 'стать', 'любить', 'надо', 'нужно', 'можно', 'нельзя', 'должный', 'пора', 'перестать', 'хотеться']);
+function readingLabel(lemma, tags) {
+  const pos = mainPos(tags);
+  if (pos === 'INFN' || (pos === 'VERB' && tags.some(t => posOf(t) === 'INFN'))) return tags.some(t => posOf(t) === 'INFN') && !tags.some(t => posOf(t) === 'VERB') ? 'глагол (инфинитив)' : POS_RU[pos];
+  if (pos === 'ADJF' && tags.some(t => has(t, 'Apro'))) return POSSESSIVE.has(lemma) ? 'притяжательное местоимение' : 'местоимение';
+  if (pos === 'VERB') {
+    if (tags.every(t => has(t, 'impr'))) return 'глагол, повелительное наклонение';
+    if (tags.every(t => has(t, 'past'))) return 'глагол, прошедшее время';
+  }
+  return POS_RU[pos] || pos.toLowerCase();
+}
+// признаки согласования: падеж-число-род
+const agreeKeys = tags => new Set(tags.flatMap(t => {
+  const c = CASES.find(x => has(t, x)); if (!c) return [];
+  const num = has(t, 'plur') ? 'plur' : 'sing';
+  const gs = num === 'plur' ? ['*'] : ['masc', 'femn', 'neut'].filter(g => has(t, g)).concat(has(t, 'ms-f') ? ['masc', 'femn'] : []);
+  return (gs.length ? gs : ['*']).map(g => `${c}-${num}-${g}`);
+}));
+const agrees = (adjTags, nounTags) => {
+  const a = agreeKeys(adjTags), n = agreeKeys(nounTags);
+  for (const k of a) { const [c, num, g] = k.split('-'); for (const k2 of n) { const [c2, num2, g2] = k2.split('-'); if (c === c2 && num === num2 && (g === '*' || g2 === '*' || g === g2)) return true; } }
+  return false;
+};
+const RU_CHOICE = new Map();   // «позиция:слово» → выбранная вручную лемма
+function analyzeRu(text) {
+  const toks = (text.match(/[а-яё]+(?:-[а-яё]+)?|[.,!?;:—–()«»"]/gi) || []);
+  const words = [];
+  toks.forEach((t, i) => { if (/[а-яё]/i.test(t)) words.push({ w: t, ti: i, clauseStart: i === 0 || /[.,!?;:—–()«»"]/.test(toks[i - 1]) }); });
+  words.forEach((wd, j) => {
+    const f = ruNorm(wd.w), rd = RU_READ.get(f);
+    wd.readings = rd ? [...rd.entries()].map(([lemma, tags]) => ({ lemma, tags, label: readingLabel(lemma, tags) })) : [];
+    wd.prev = words[j - 1] && !words[j].clauseStart ? words[j - 1] : null;
+    wd.next = words[j + 1] && !words[j + 1].clauseStart ? words[j + 1] : null;
+  });
+  const nounTags = wd => (wd && wd.readings || []).flatMap(r => r.tags.filter(t => ['NOUN', 'NPRO'].includes(posOf(t))));
+  words.forEach((wd, j) => {
+    const prevW = wd.prev ? ruNorm(wd.prev.w) : '', sc = (D.rux || {})[ruNorm(wd.w)] || {};
+    const clauseInit = wd.clauseStart || CLAUSE_OPENERS.has(prevW);
+    const hasU = words.slice(0, j).some((o, k) => ruNorm(o.w) === 'у' && words.slice(k + 1, j).every(z => !z.clauseStart));
+    wd.readings.forEach(r => {
+      let s = 1 + (sc[r.lemma] || 0) * 0.5;
+      const pos = r.tags.map(posOf), isImpr = r.tags.length && r.tags.every(t => has(t, 'impr'));
+      const nominal = pos.some(p => ['NOUN', 'ADJF', 'NPRO', 'NUMR'].includes(p)), verbal = pos.some(p => ['VERB', 'INFN', 'GRND'].includes(p));
+      if (pos.every(p => p === 'INTJ')) s -= 0.7;
+      const prevLemmas = wd.prev ? (wd.prev.readings || []).map(x => x.lemma).concat(ruNorm(wd.prev.w)) : [];
+      if (pos.includes('INFN') && prevLemmas.some(l => MODALS.has(l))) s += 2;      // «хочу есть»
+      if (r.lemma === 'быть' && prevLemmas.some(l => MODALS.has(l))) s -= 1;
+      if (isImpr) s -= 0.4;
+      if (PREP_CASES[prevW]) {                                   // после предлога — именное прочтение в нужном падеже
+        const cs = PREP_CASES[prevW].split(' ');
+        if (r.tags.some(t => cs.some(c => has(t, c)) && ['NOUN', 'ADJF', 'NPRO', 'NUMR'].includes(posOf(t)))) s += 2; else if (verbal) s -= 1.5;
+      }
+      if (prevW === 'не' && verbal) s += 1.5;                     // «не» + глагол
+      if (pos.includes('ADJF') && wd.next && agrees(r.tags.filter(t => posOf(t) === 'ADJF'), nounTags(wd.next))) s += 2.5;  // согласование
+      if (isImpr) s += clauseInit ? 1 : (prevW === 'не' ? 0 : -1);   // повелительное — в начале высказывания
+      if (isImpr && wd.next && nounTags(wd.next).some(t => has(t, 'accs'))) s += 0.5;   // «мой руки»: глагол + дополнение
+      if (r.lemma === 'быть' && hasU) s += 2;                      // «у кого-то есть»
+      r.score = s;
+    });
+    wd.readings.sort((a, b) => b.score - a.score);
+    const key = `${j}:${ruNorm(wd.w)}`;
+    if (RU_CHOICE.has(key)) { const k = wd.readings.findIndex(r => r.lemma === RU_CHOICE.get(key)); if (k > 0) wd.readings.unshift(...wd.readings.splice(k, 1)); wd.manual = true; }
+    wd.key = key;
+    wd.keys = wd.readings.length ? [wd.readings[0].lemma] : ['~' + ruStem(ruNorm(wd.w))];
+  });
+  return words;
+}
+// значения из разборов: каждое русское слово значения — в выбранном по контексту прочтении
+PIDS.forEach(p => parseItems(PID[p].ex.parse).forEach(({ w, g }) => {
+  if (!w) return;
+  const core = g.split(/[;,(]/)[0].replace(/^\s*здесь\s+/, '').trim();
+  analyzeRu(core).forEach(wd => {
+    const lw = ruNorm(wd.w), keys = new Set([...(D.ru && D.ru[lw] ? [lw] : wd.keys), '~' + ruStem(lw)]);
+    keys.forEach(k => {
+      if (!RU_GLOSS.has(k)) RU_GLOSS.set(k, new Map());
+      const m = RU_GLOSS.get(k), key = w + '|' + core.toLowerCase();
+      if (!m.has(key)) m.set(key, { w, gloss: core, pids: [] });
+      if (!m.get(key).pids.includes(p)) m.get(key).pids.push(p);
+    });
+  });
+}));
+function matchesFor(keys) {
   const es = collect(RU_TITLE, keys);
   const gs = []; keys.forEach(k => RU_GLOSS.has(k) && RU_GLOSS.get(k).forEach(v => { if (!gs.includes(v)) gs.push(v); }));
+  return { es, gs };
+}
+function matchHtml({ es, gs }) {
   const parts = [];
   if (es.length) parts.push(`<div class="pblk"><span class="plab">В словаре</span><ul>${es.slice(0, 5).map(e => `<li>${wordLink(e)}${e.variants.length ? ` — <span class="dn">${esc(e.variants.map(v => v.form).slice(0, 3).join(', '))}</span>` : ' <span class="muted small">написание не установлено</span>'}</li>`).join('')}${es.length > 5 ? `<li class="muted small">и ещё ${es.length - 5}</li>` : ''}</ul></div>`);
   if (gs.length) parts.push(`<div class="pblk"><span class="plab">В разборах примеров</span><ul>${gs.slice(0, 4).map(g => `<li><span class="dn">${esc(g.w)}</span> — ${esc(g.gloss)} <span class="small">${g.pids.slice(0, 3).map(p => `<a class="pid" href="#p${p.slice(1)}">${p}</a>`).join(' ')}${g.pids.length > 3 ? ' …' : ''}</span></li>`).join('')}${gs.length > 4 ? `<li class="muted small">и ещё ${gs.length - 4}</li>` : ''}</ul></div>`);
-  const found = parts.length > 0, hint = lemmaHint(word);
-  return { found, html: `<div class="ptok${found ? '' : ' unk'}"><span class="ptw ru">${esc(word)}</span>${hint ? `<span class="small muted">начальная форма: ${esc(hint)}</span>` : ''}${found ? parts.join('') : '<p class="small muted">Этого слова нет ни в заголовках статей, ни в разборах примеров.</p>'}</div>` };
+  return parts.join('');
+}
+function ruTokCard(wd) {
+  const main = matchesFor(wd.keys), found = !!(main.es.length || main.gs.length);
+  const r0 = wd.readings[0];
+  const head = r0 ? `<span class="small muted">${r0.lemma !== ruNorm(wd.w) ? `начальная форма: ${esc(r0.lemma)} · ` : ''}${esc(r0.label)}${wd.manual ? ' · выбрано вручную' : ''}</span>` : '';
+  const alts = wd.readings.slice(1).filter(r => r.lemma !== (r0 && r0.lemma)).map(r => {
+    const m = matchesFor([r.lemma]);
+    return `<details class="palt"><summary>Другое прочтение: ${esc(r.lemma)} — ${esc(r.label)}</summary>${matchHtml(m) || '<p class="small muted">В словаре для этого прочтения ничего нет.</p>'}<button type="button" class="pick" data-key="${esc(wd.key)}" data-lemma="${esc(r.lemma)}">Выбрать это прочтение</button></details>`;
+  }).join('');
+  return { found, html: `<div class="ptok${found ? '' : ' unk'}"><span class="ptw ru">${esc(wd.w)}</span>${head}${found ? matchHtml(main) : '<p class="small muted">Этого слова нет ни в заголовках статей, ни в разборах примеров.</p>'}${alts}</div>` };
 }
 function ruResults(text) {
-  const words = ruWords(text);
+  const words = analyzeRu(text);
   if (!words.length) return '<p class="muted">В тексте нет русских слов.</p>';
   const cards = words.map(ruTokCard), ok = cards.filter(c => c.found).length;
+  const amb = words.filter(w => new Set(w.readings.map(r => r.lemma)).size > 1).length;
   const fq = fold(text);
   const exact = PIDS.find(p => fold(PID[p].ex.lit || '') === fq || (PID[p].ex.pub && fold(PID[p].ex.pub) === fq));
-  const qw = words.map(w => ({ w, keys: ruKeys(w, false) }));
-  const allQ = new Set(qw.flatMap(q => q.keys));
+  const allQ = new Set(words.flatMap(w => w.keys));
   const sim = exact ? [] : RU_EX.map(r => {
-    const hit = qw.filter(q => q.keys.some(k => r.keys.has(k)));
+    const hit = words.filter(q => q.keys.some(k => r.keys.has(k)));
     return { ...r, hit, score: hit.reduce((s, q) => s + (q.w.length <= 2 ? 0.3 : Math.min(q.w.length, 5)), 0) / Math.sqrt(r.keys.size + 1) };
   }).filter(r => r.hit.length).sort((a, b) => b.score - a.score).slice(0, 5);
   const hlRu = t => t.replace(/[а-яё]+/gi, w => ruKeys(w, false).some(k => allQ.has(k)) ? `<mark>${w}</mark>` : w);
-  return `<p class="statline"><span>Найдено: <b>${ok}</b> из ${words.length}</span>${words.length - ok ? `<span>не найдено: <b>${words.length - ok}</b></span>` : ''}</p>
+  return `<p class="statline"><span>Найдено: <b>${ok}</b> из ${words.length}</span>${words.length - ok ? `<span>не найдено: <b>${words.length - ok}</b></span>` : ''}${amb ? `<span>неоднозначных слов: <b>${amb}</b></span>` : ''}</p>
     ${exact ? `<div class="box"><span class="label">Эта фраза есть в словаре целиком</span>Ниже её полный пример на денди с переводами и разбором.</div>${exCard(PID[exact].ex, null)}` : ''}
     ${sim.length ? `<section class="stack"><h2>Как это сказано в примерах</h2><p class="small muted">Полные фразы на денди, в переводе которых есть ваши слова в любой форме. Это проверенные цитаты, а не перевод вашей фразы.</p>
       <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${esc(r.x.dendi)}</span></span><span class="rx">${hlRu(esc(r.x.lit))}</span></li>`).join('')}</ul></section>` : ''}
-    <section class="stack"><h2>Слова</h2><div class="ptoks">${cards.map(c => c.html).join('')}</div></section>`;
+    <section class="stack"><h2>Слова</h2>${amb ? '<p class="small muted">Для слов с несколькими прочтениями основное выбрано по соседним словам; другое прочтение можно открыть и выбрать вручную.</p>' : ''}<div class="ptoks">${cards.map(c => c.html).join('')}</div></section>`;
 }
 
 // ---------- страница ----------
@@ -732,6 +871,7 @@ function vParse() {
   </div>`;
 }
 function runParse(text) {
+  if (text !== parseText) RU_CHOICE.clear();
   parseText = text;
   try { localStorage.setItem('dn-parse', text); localStorage.setItem('dn-pdir', parseDir); } catch (_) {}
   const el = document.getElementById('pres'); if (el) el.innerHTML = parseResults(text);
@@ -742,6 +882,8 @@ if (document.addEventListener) {
   document.addEventListener('click', ev => {
     const s = ev.target.closest && ev.target.closest('.psample');
     if (s) { const t = PID[s.dataset.p].ex[s.dataset.f]; document.getElementById('ptext').value = t; runParse(t); return; }
+    const pk = ev.target.closest && ev.target.closest('.pick');
+    if (pk) { RU_CHOICE.set(pk.dataset.key, pk.dataset.lemma); runParse(document.getElementById('ptext').value); return; }
     const d = ev.target.closest && ev.target.closest('.pdir');
     if (d) {
       parseDir = d.dataset.dir;
@@ -765,6 +907,7 @@ function route() {
   else if ((m = h.match(/^l(\d+)$/))) { html = vLetter(+m[1]); L = ALPHA[+m[1]]; }
   else if ((m = h.match(/^g(\d+)$/))) { html = vHome(); nav = 'home'; scrollTo = h; L = ALPHA[+m[1]]; }
   else if ((m = h.match(/^p(\d+)$/))) { html = vExamples(h); nav = 'examples'; scrollTo = h; title = `П${m[1]} · Словарь денди`; }
+  else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }
   else if (PAGES[h]) { html = PAGES[h][1](); nav = h; title = PAGES[h][0] + ' · Словарь денди'; }
