@@ -293,6 +293,16 @@ def build_data(vault):
             note(plain if not l.startswith('#') else plain)
         if pending and var is not None:
             var['notes'] += pending
+        # Примеры из раздела «Полные примеры по ссылкам…» входят в заявленное число варианта.
+        # Если недосчитался ровно один вариант и ровно на столько примеров, сколько в этом разделе, —
+        # примеры относятся к нему: показываем их под вариантом.
+        short = [v for v in e['variants'] if v['full'] is not None and v['full'] > len(v['examples'])]
+        if len(short) == 1 and e['linked'] and short[0]['full'] - len(short[0]['examples']) == len(e['linked']) \
+                and not {x['pid'] for x in e['linked']} & {x['pid'] for x in short[0]['examples']}:
+            v = short[0]
+            for x in e['linked']:
+                x['k'] = len(v['examples']) + 1; v['examples'].append(x)
+            e['linked'] = []
         for v in e['variants']:
             if v['full'] is not None and v['full'] != len(v['examples']):
                 warnings.append(f'статья {n} «{title}», вариант {v["form"] or "—"}: заявлено полных примеров {v["full"]}, встроено {len(v["examples"])}')
