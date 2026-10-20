@@ -184,8 +184,8 @@ def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
     if len(e['variants']) > 1:
         meta += f'<span>{len(e["variants"])} {plural(len(e["variants"]), "вариант", "варианта", "вариантов")}</span>'
     meta += f'<span>{n_ex} {plural(n_ex, "полный пример", "полных примера", "полных примеров")}</span>' if n_ex else '<span>полных примеров пока нет</span>'
-    li = ALPHA.index(e['letter']) if e['letter'] in ALPHA else 0
-    parts = [f'<div class="crumbs"><a href="{p}">Словник</a><span>›</span><a href="{p}#l{li}">{e_(e["letter"])}</a></div>',
+    lhref = f'{p}#l{ALPHA.index(e["letter"])}' if e['letter'] in ALPHA else p
+    parts = [f'<div class="crumbs"><a href="{p}">Словник</a><span>›</span><a href="{lhref}">{e_(e["letter"])}</a></div>',
              f'<div class="entry-head"><h1>{e_(e["title"])}</h1><div class="meta">{meta}</div></div>']
     if e.get('unestablished'):
         parts.append(f'<div class="box warn"><span class="label">Написание не установлено</span>{e_(e["unestablished"])}</div>')
@@ -222,6 +222,7 @@ def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
 
 def static_index(entries):
     letters = [L for L in ALPHA if any(e['letter'] == L for e in entries)]
+    letters += sorted({e['letter'] for e in entries} - set(ALPHA))  # заголовки на другую букву (COVID-19)
     out = ['<div class="stack"><h1>Русско-дендийский словарь</h1>', f'<p class="lead">{e_(SITE_DESC)}</p><div class="letters">']
     for L in letters:
         items = ''.join(

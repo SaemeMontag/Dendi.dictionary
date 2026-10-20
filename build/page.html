@@ -281,6 +281,8 @@ const D = JSON.parse(document.getElementById('data').textContent);
 const E = D.entries;
 const byN = {}; E.forEach(e => byN[e.n] = e);
 const ALPHA = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЭЮЯ'.split('');
+// заголовки на другую букву (например, латинскую: COVID-19) — отдельными группами в конце
+ALPHA.push(...[...new Set(E.map(e => e.letter))].filter(l => !ALPHA.includes(l)).sort());
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const foldRu = s => s.toLowerCase().replace(/ё/g, 'е');
 const foldDn = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
