@@ -99,6 +99,7 @@ def header(prefix):
       <a href="{prefix}#grammar">Грамматика</a>
       <a href="{prefix}#sources">Источники</a>
       <a href="{prefix}#about">Как пользоваться</a>
+      <a href="{prefix}#contacts">Контакты</a>
     </nav>
   </div>
   <div class="weave" aria-hidden="true"></div>

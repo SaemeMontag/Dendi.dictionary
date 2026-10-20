@@ -206,6 +206,8 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .btn { font: inherit; font-weight: 500; padding: 8px 18px; border-radius: 8px; border: 0; background: var(--accent); color: var(--paper); cursor: pointer; }
 .btn:hover { filter: brightness(1.1); }
+.contacts p + p { margin-top: 10px; }
+.contacts a { font-size: 1.05rem; overflow-wrap: anywhere; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
