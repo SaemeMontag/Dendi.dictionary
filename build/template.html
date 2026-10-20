@@ -211,6 +211,15 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .btn { font: inherit; font-weight: 500; padding: 8px 18px; border-radius: 8px; border: 0; background: var(--accent); color: var(--paper); cursor: pointer; }
 .btn:hover { filter: brightness(1.1); }
+.btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+.btn2:hover { border-color: var(--accent); }
+.pbtns { display: flex; gap: 8px; }
+.qwrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.qwrap input[type=search] { padding-right: 36px; }
+.qwrap input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.qclear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.qclear:hover { color: var(--ink); background: var(--line); }
+.qclear[hidden] { display: none; }
 .psamples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .psample { font: inherit; font-family: var(--f-dendi); font-size: .92rem; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .psample:hover { border-color: var(--accent); }
@@ -252,7 +261,7 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 <div class="bar">
   <div class="wrap">
     <form class="search" id="sform" role="search">
-      <input type="search" id="q" placeholder="Слово по-русски или на денди: вода, hari, kpaarɛ…" autocomplete="off" aria-label="Поиск по словарю">
+      <div class="qwrap"><input type="search" id="q" placeholder="Слово по-русски или на денди: вода, hari, kpaarɛ…" autocomplete="off" aria-label="Поиск по словарю"><button type="button" class="qclear" id="qclear" title="Очистить поле" aria-label="Очистить поле" hidden>×</button></div>
       <div class="chars" aria-label="Вставить букву">
         <button type="button" data-ch="ɛ" title="Вставить ɛ">ɛ</button><button type="button" data-ch="ɔ" title="Вставить ɔ">ɔ</button><button type="button" data-ch="ŋ" title="Вставить ŋ">ŋ</button>
       </div>
@@ -277,6 +286,26 @@ const foldRu = s => s.toLowerCase().replace(/ё/g, 'е');
 const foldDn = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/ɛ/g,'e').replace(/ɔ/g,'o').replace(/ŋ/g,'n').replace(/ɲ/g,'ny').replace(/[‹›«»"'’.,;:!?()\/]/g,'').replace(/[\s-]+/g,'');
 const fold = s => foldDn(foldRu(s));
+// свободный ключ: как foldDn, но ещё и без удвоений (gono = goono, bene = bɛɛnɛ)
+const looseDn = s => foldDn(s).replace(/(.)\1+/g, '$1');
+// близость написания: насколько форма словаря отличается от того, что набрал читатель
+const SP_BASE = { 'ɛ': 'e', 'ɔ': 'o', 'ŋ': 'n' };
+const spChars = s => [...s.normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC').toLowerCase().replace(/[\s\-‹›'’.,;:!?()«»"\/]/g, '')];
+function spellDist(typed, form) {
+  const a = spChars(typed), b = spChars(form), bc = c => SP_BASE[c] || c;
+  const indel = (s, i) => (i > 0 && bc(s[i - 1]) === bc(s[i])) || (i + 1 < s.length && bc(s[i + 1]) === bc(s[i])) ? 0.5 : 1;
+  let prev = [0]; for (let j = 1; j <= b.length; j++) prev[j] = prev[j - 1] + indel(b, j - 1);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [prev[0] + indel(a, i - 1)];
+    for (let j = 1; j <= b.length; j++) {
+      const sub = a[i - 1] === b[j - 1] ? 0 : bc(a[i - 1]) === bc(b[j - 1]) ? 0.4 : 1;
+      cur[j] = Math.min(prev[j - 1] + sub, prev[j] + indel(a, i - 1), cur[j - 1] + indel(b, j - 1));
+    }
+    prev = cur;
+  }
+  const tone = typed.normalize('NFC').toLowerCase() === form.normalize('NFC').toLowerCase() ? 0 : 0.05;
+  return prev[b.length] + tone;
+}
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; }
 
 // варианты, формы, примеры
@@ -495,7 +524,7 @@ function vAbout() {
   return `<div class="stack" style="gap:18px">
     <h1>Как пользоваться</h1>
     <div class="md">${blocks(D.meta.intro)}</div>
-    <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона и долготы можно не набирать: <span class="dn">kpaare</span> найдёт <span class="dn">kpaarɛ</span>, а <span class="dn">beeri</span> найдёт и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по полным фразам и их переводам.</div>
+    <div class="box"><span class="label">Поиск</span>Ищите по русскому слову или по дендийской форме. Знаки тона, удвоенные буквы и особые буквы можно не набирать: <span class="dn">gono</span> найдёт <span class="dn">goono</span>, <span class="dn">bene</span> — <span class="dn">bɛɛnɛ</span>, а <span class="dn">beeri</span> — и <span class="dn">bèèri</span>, и <span class="dn">bèeri</span>. Если подходит несколько слов, первыми идут те, что ближе к набранному написанию. Буквы ɛ, ɔ, ŋ можно вставить кнопками рядом с полем. Отметка «искать в примерах» включает поиск по полным фразам и их переводам.</div>
     <div class="box"><span class="label">Пометки</span><p><span class="tag info">доп.</span> — дополнительная лексика и грамматика вне списка Сводеша.</p><p style="margin-top:6px"><span class="tag warn">написание не установлено</span> — проверенного письменного эквивалента пока нет; это не означает, что в языке нет такого слова.</p><p style="margin-top:6px"><span class="pidtag">П19</span> — номер полного примера; один пример может стоять в нескольких статьях.</p></div>
     <div class="box"><span class="label">Перевод фразы</span>На странице <a href="#parse">«Перевод фразы»</a> можно вставить предложение на денди или по-русски: для каждого слова покажутся статьи словаря и значения из разборов полных примеров, а ниже — похожие фразы с готовым переводом. Это помощь при чтении, а не машинный перевод: сайт ничего не достраивает сверх словаря. Русские слова понимаются в любой форме (падеж, лицо, время, повелительное наклонение) по морфологическому словарю <a href="http://opencorpora.org" target="_blank" rel="noopener">OpenCorpora</a> (CC BY-SA) с помощью библиотеки <a href="https://github.com/deNULL/Az.js" target="_blank" rel="noopener">Az.js</a>.</div>
   </div>`;
@@ -504,38 +533,42 @@ function vAbout() {
 // поиск
 const IDX = E.map(e => ({
   e, t: foldRu(e.title),
-  forms: allForms(e).map(ff => ({ raw: ff, k: foldDn(ff) })),
-  ex: examplesOf(e).map(x => ({ x, k: fold([x.dendi, x.lit, x.pub].join(' ')) }))
+  forms: allForms(e).map(ff => ({ raw: ff, k: foldDn(ff), lk: looseDn(ff) })),
+  ex: examplesOf(e).map(x => ({ x, k: fold([x.dendi, x.lit, x.pub].join(' ')), lk: looseDn(x.dendi) }))
 }));
 let query = '', inEx = false;
 try { inEx = localStorage.getItem('dn-inex') === '1'; } catch (_) {}
 document.getElementById('inex').checked = inEx;
 function hlDn(text, q) {
-  const qk = foldDn(q); if (!qk) return esc(text);
-  return text.split(/(\s+)/).map(w => foldDn(w).includes(qk) && qk.length > 1 ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
+  const qk = foldDn(q), ql = looseDn(q); if (!qk) return esc(text);
+  return text.split(/(\s+)/).map(w => qk.length > 1 && (foldDn(w).includes(qk) || (ql.length > 2 && looseDn(w).includes(ql))) ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
 }
 function vSearch() {
   const q = query.trim();
   if (!q) return vHome();
-  const qr = foldRu(q), qk = fold(q);
+  const qr = foldRu(q), qk = fold(q), ql = looseDn(qr);
   const qRu = isRu(q) ? ruWords(q).map(w => ruKeys(w, false)) : [];
   const out = [];
   IDX.forEach(r => {
-    let score = 0, hitForm = null; const hitEx = [];
+    let score = 0, hitForm = null, dist = 9; const hitEx = [];
     if (r.t === qr) score = 100; else if (r.t.startsWith(qr)) score = 80; else if (r.t.includes(qr)) score = 60;
     if (score < 70 && qRu.length && qRu.every(ks => ks.some(k => TITLE_KEYS.get(r.e).has(k)))) score = 70;
     r.forms.forEach(f => {
       let s = 0;
-      if (f.k === qk) s = 95; else if (f.k.startsWith(qk)) s = 75; else if (qk.length > 2 && f.k.includes(qk)) s = 50;
-      if (s > score) { score = s; hitForm = f.raw; } else if (s && !hitForm) hitForm = f.raw;
+      if (f.k === qk) s = 95; else if (ql && f.lk === ql) s = 90;
+      else if (f.k.startsWith(qk)) s = 75; else if (ql && f.lk.startsWith(ql)) s = 72;
+      else if (qk.length > 2 && f.k.includes(qk)) s = 50; else if (ql.length > 2 && f.lk.includes(ql)) s = 45;
+      if (!s) return;
+      const d = spellDist(q, f.raw);
+      if (s > score || (s === score && d < dist)) { score = s; hitForm = f.raw; dist = d; } else if (!hitForm) hitForm = f.raw;
     });
     if (inEx && qk.length > 1) {
-      r.ex.forEach(x => { if (x.k.includes(qk) && !hitEx.includes(x.x)) hitEx.push(x.x); });
+      r.ex.forEach(x => { if ((x.k.includes(qk) || (ql.length > 2 && x.lk.includes(ql))) && !hitEx.includes(x.x)) hitEx.push(x.x); });
       if (hitEx.length && !score) score = 20;
     }
-    if (score) out.push({ r, score, hitForm, hitEx });
+    if (score) out.push({ r, score, hitForm, hitEx, dist });
   });
-  out.sort((a, b) => b.score - a.score || a.r.e.n - b.r.e.n);
+  out.sort((a, b) => b.score - a.score || a.dist - b.dist || a.r.e.n - b.r.e.n);
   if (!out.length) return `<div class="stack"><h1>Ничего не найдено</h1><p>По запросу «${esc(q)}» нет ни русских заголовков, ни дендийских форм${inEx ? ', ни примеров' : ''}. ${inEx ? '' : 'Попробуйте включить «искать в примерах».'} Тон и долготу можно не набирать.</p></div>`;
   return `<div class="stack"><h1>Поиск: «${esc(q)}»</h1><p class="muted">${out.length} ${plural(out.length, 'статья', 'статьи', 'статей')}</p>
     <ul class="res">${out.slice(0, 150).map(o => {
@@ -549,69 +582,100 @@ function vSearch() {
 // разбор фразы: только то, что есть в словаре и в разборах П; связного перевода не строим
 const tokenize = s => s.normalize('NFC').split(/[\s.,;:!?«»“”„"()\[\]…—–]+/).map(t => t.replace(/^['‹›’]+|['‹›’]+$/g, '')).filter(Boolean);
 const sameSpelling = (a, b) => a.normalize('NFC').toLowerCase() === b.normalize('NFC').toLowerCase();
-const FORM_IDX = new Map();
+// два указателя: точный (без тона, ɛ=e, ɔ=o, ŋ=n) — для сочетаний слов; свободный (ещё и без удвоений) — для отдельных слов
+const FORM_IDX = new Map(), FORM_LOOSE = new Map();
+const addTo = (map, k, item, same) => { if (!k) return; if (!map.has(k)) map.set(k, []); const arr = map.get(k); if (!arr.some(x => same(x, item))) arr.push(item); };
 E.forEach(e => e.variants.forEach(v => variantForms(v).forEach(f => {
-  const k = foldDn(f); if (!k) return;
-  if (!FORM_IDX.has(k)) FORM_IDX.set(k, []);
-  const arr = FORM_IDX.get(k); if (!arr.some(x => x.e === e && x.form === f)) arr.push({ e, v, form: f });
+  const it = { e, v, form: f }, same = (x, y) => x.e === y.e && x.form === y.form;
+  addTo(FORM_IDX, foldDn(f), it, same); addTo(FORM_LOOSE, looseDn(f), it, same);
 })));
-const GLOSS_IDX = new Map();
+const GLOSS_IDX = new Map(), GLOSS_LOOSE = new Map();
 PIDS.forEach(p => parseItems(PID[p].ex.parse).forEach(({ w, g }) => w.split(/\s*\/\s*/).forEach(raw => {
-  const k = foldDn(raw); if (!k || !w) return;
-  if (!GLOSS_IDX.has(k)) GLOSS_IDX.set(k, new Map());
-  const m = GLOSS_IDX.get(k), key = g.toLowerCase();
-  if (!m.has(key)) m.set(key, { gloss: g, raw, pids: [] });
-  if (!m.get(key).pids.includes(p)) m.get(key).pids.push(p);
+  if (!w) return;
+  [[GLOSS_IDX, foldDn(raw)], [GLOSS_LOOSE, looseDn(raw)]].forEach(([map, k]) => {
+    if (!k) return;
+    if (!map.has(k)) map.set(k, new Map());
+    const m = map.get(k), key = g.toLowerCase() + '|' + raw.normalize('NFC').toLowerCase();
+    if (!m.has(key)) m.set(key, { gloss: g, raw, pids: [] });
+    if (!m.get(key).pids.includes(p)) m.get(key).pids.push(p);
+  });
 })));
-const lookup = k => ({ forms: FORM_IDX.get(k) || [], gloss: GLOSS_IDX.has(k) ? [...GLOSS_IDX.get(k).values()] : [] });
+const lookup = (k, loose) => {
+  const F = loose ? FORM_LOOSE : FORM_IDX, G = loose ? GLOSS_LOOSE : GLOSS_IDX;
+  return { forms: F.get(k) || [], gloss: G.has(k) ? [...G.get(k).values()] : [] };
+};
+const DN_CHOICE = new Map();   // «позиция:слово» → выбранное вручную написание
 function analyze(text) {
   const toks = tokenize(text), out = [];
   let i = 0;
   while (i < toks.length) {
     let hit = null;
     for (let n = Math.min(4, toks.length - i); n >= 2 && !hit; n--) {
-      const words = toks.slice(i, i + n), k = foldDn(words.join(' ')), r = lookup(k);
+      const words = toks.slice(i, i + n), k = foldDn(words.join(' ')), r = lookup(k, false);
       if (r.forms.length || r.gloss.length) hit = { words, k, ...r };
     }
-    if (!hit) { const words = [toks[i]], k = foldDn(toks[i]); hit = { words, k, ...lookup(k) }; }
+    if (!hit) { const words = [toks[i]], k = looseDn(toks[i]); hit = { words, k, ...lookup(k, true) }; }
     if (!hit.forms.length && !hit.gloss.length) {
+      const fk = foldDn(hit.words[0]);
       for (const suf of ['yom', 'yo']) {
-        if (hit.k.length > suf.length + 1 && hit.k.endsWith(suf)) {
-          const r = lookup(hit.k.slice(0, -suf.length));
+        if (fk.length > suf.length + 1 && fk.endsWith(suf)) {
+          const r = lookup(looseDn(fk.slice(0, -suf.length)), true);
           if (r.forms.length || r.gloss.length) { hit.guess = { suf, ...r }; break; }
         }
       }
     }
+    hit.key = out.length + ':' + hit.words.join(' ').toLowerCase();
     out.push(hit); i += hit.words.length;
   }
   return out;
 }
 function similarExamples(text) {
-  const q = new Set(tokenize(text).map(foldDn).filter(Boolean));
+  const q = new Set(tokenize(text).map(looseDn).filter(Boolean));
   return PIDS.map(p => {
-    const x = PID[p].ex, ws = tokenize(x.dendi).map(foldDn);
+    const x = PID[p].ex, ws = tokenize(x.dendi).map(looseDn);
     const common = [...new Set(ws.filter(w => q.has(w)))];
     return { p, x, common, score: common.reduce((s, w) => s + Math.min(w.length, 5), 0) / Math.sqrt(ws.length + 1) };
   }).filter(r => r.common.length).sort((a, b) => b.score - a.score).slice(0, 4);
 }
-const approx = (word, form) => sameSpelling(word, form) ? '' : ` <span class="tag warn" title="Совпадает без учёта тона, долготы или дефиса">≈ <span class="dn">${esc(form)}</span></span>`;
+const approx = (word, form) => sameSpelling(word, form) ? '' : ` <span class="tag warn" title="Совпадает без учёта тона, долготы, особых букв или дефиса">≈ <span class="dn">${esc(form)}</span></span>`;
+const spKey = s => s.normalize('NFC').toLowerCase();
+// разложить найденное по написаниям: ближайшее к набранному — основное, остальные — «другие написания»
+function bySpelling(word, r, chosen) {
+  const groups = new Map();
+  const put = (sp, kind, item) => {
+    const k = spKey(sp);
+    if (!groups.has(k)) groups.set(k, { sp, d: spellDist(word, sp), forms: [], gloss: [] });
+    groups.get(k)[kind].push(item);
+  };
+  r.forms.forEach(f => put(f.form, 'forms', f));
+  r.gloss.forEach(g => put(g.raw, 'gloss', g));
+  const list = [...groups.values()].sort((a, b) => a.d - b.d || b.forms.length - a.forms.length);
+  if (!list.length) return { main: [], alts: [] };
+  const pick = chosen && list.find(g => spKey(g.sp) === chosen);
+  const main = pick ? [pick] : list.filter(g => g.d <= list[0].d + 0.06);
+  return { main, alts: list.filter(g => !main.includes(g)), manual: !!pick };
+}
 function tokCard(h) {
   const word = h.words.join(' ');
-  const block = (r, title) => {
-    const parts = [], forms = [];
-    r.forms.forEach(f => {
-      const j = forms.findIndex(u => u.e === f.e);
-      if (j < 0) forms.push(f); else if (!sameSpelling(word, forms[j].form) && sameSpelling(word, f.form)) forms[j] = f;
-    });
-    r = { ...r, forms };
-    if (r.forms.length) parts.push(`<div class="pblk"><span class="plab">${title ? title + ' · ' : ''}В словаре</span><ul>${r.forms.slice(0, 5).map(f => `<li>${wordLink(f.e)}${f.v.label ? ` <span class="muted small">вар. ${f.v.label}</span>` : ''}${approx(word, f.form)}</li>`).join('')}${r.forms.length > 5 ? `<li class="muted small">и ещё ${r.forms.length - 5}</li>` : ''}</ul></div>`);
-    if (r.gloss.length) parts.push(`<div class="pblk"><span class="plab">В разборах примеров</span><ul>${r.gloss.slice(0, 4).map(g => `<li>${esc(g.gloss)} <span class="small">${g.pids.slice(0, 4).map(p => `<a class="pid" href="#p${p.slice(1)}">${p}</a>`).join(' ')}${g.pids.length > 4 ? ' …' : ''}</span>${approx(word, g.raw)}</li>`).join('')}${r.gloss.length > 4 ? `<li class="muted small">и ещё ${r.gloss.length - 4}</li>` : ''}</ul></div>`);
+  const block = (gs, title) => {
+    const parts = [], forms = [], gloss = gs.flatMap(g => g.gloss);
+    gs.flatMap(g => g.forms).forEach(f => { if (!forms.some(u => u.e === f.e)) forms.push(f); });
+    if (forms.length) parts.push(`<div class="pblk"><span class="plab">${title ? title + ' · ' : ''}В словаре</span><ul>${forms.slice(0, 5).map(f => `<li>${wordLink(f.e)}${f.v.label ? ` <span class="muted small">вар. ${f.v.label}</span>` : ''}${approx(word, f.form)}</li>`).join('')}${forms.length > 5 ? `<li class="muted small">и ещё ${forms.length - 5}</li>` : ''}</ul></div>`);
+    if (gloss.length) parts.push(`<div class="pblk"><span class="plab">В разборах примеров</span><ul>${gloss.slice(0, 4).map(g => `<li>${esc(g.gloss)} <span class="small">${g.pids.slice(0, 4).map(p => `<a class="pid" href="#p${p.slice(1)}">${p}</a>`).join(' ')}${g.pids.length > 4 ? ' …' : ''}</span>${approx(word, g.raw)}</li>`).join('')}${gloss.length > 4 ? `<li class="muted small">и ещё ${gloss.length - 4}</li>` : ''}</ul></div>`);
     return parts.join('');
   };
+  const altHtml = sp => sp.alts.map(g => `<details class="palt"><summary>Другое написание: <span class="dn">${esc(g.sp)}</span></summary>${block([g], '')}<button type="button" class="pick dpick" data-key="${esc(h.key)}" data-sp="${esc(spKey(g.sp))}">Выбрать это написание</button></details>`).join('');
   const found = h.forms.length || h.gloss.length;
-  let body = found ? block(h, '') : '';
-  if (!found && h.guess) body = `<p class="small"><span class="tag warn">предположение</span> Без окончания -${h.guess.suf} слово похоже на форму из словаря. Проверьте по статье.</p>` + block(h.guess, 'Основа');
-  if (!found && !h.guess) body = '<p class="small muted">Нет ни в словаре, ни в разборах примеров.</p>';
+  let body;
+  if (found) {
+    const sp = bySpelling(word, h, DN_CHOICE.get(h.key));
+    const note = sp.manual ? '<span class="small muted">написание выбрано вручную</span>'
+      : sp.alts.length ? `<span class="small muted">ближайш${sp.main.length > 1 ? 'ие' : 'ее'} к набранному написани${sp.main.length > 1 ? 'я' : 'е'}</span>` : '';
+    body = note + block(sp.main, '') + altHtml(sp);
+  } else if (h.guess) {
+    const sp = bySpelling(foldDn(word).slice(0, -h.guess.suf.length), h.guess, DN_CHOICE.get(h.key));
+    body = `<p class="small"><span class="tag warn">предположение</span> Без окончания -${h.guess.suf} слово похоже на форму из словаря. Проверьте по статье.</p>` + block(sp.main, 'Основа') + altHtml(sp);
+  } else body = '<p class="small muted">Нет ни в словаре, ни в разборах примеров.</p>';
   return `<div class="ptok${found ? '' : h.guess ? ' guess' : ' unk'}"><span class="ptw">${esc(word)}</span>${h.words.length > 1 ? '<span class="small muted">сочетание из словаря</span>' : ''}${body}</div>`;
 }
 // ---------- русский → денди ----------
@@ -842,7 +906,7 @@ function dnResults(text) {
   const toks = analyze(text);
   if (!toks.length) return '<p class="muted">В тексте нет слов на денди.</p>';
   const n = toks.length, ok = toks.filter(t => t.forms.length || t.gloss.length).length, guess = toks.filter(t => t.guess).length;
-  const exact = PIDS.find(p => foldDn(PID[p].ex.dendi) === foldDn(text));
+  const exact = PIDS.find(p => foldDn(PID[p].ex.dendi) === foldDn(text)) || PIDS.find(p => looseDn(PID[p].ex.dendi) === looseDn(text));
   const sim = exact ? [] : similarExamples(text);
   return `<p class="statline"><span>Найдено: <b>${ok}</b> из ${n}</span>${guess ? `<span>предположений: <b>${guess}</b></span>` : ''}${n - ok - guess ? `<span>нет в словаре: <b>${n - ok - guess}</b></span>` : ''}</p>
     ${exact ? `<div class="box"><span class="label">Эта фраза есть в словаре целиком</span>Ниже её полный пример с переводами и разбором.</div>${exCard(PID[exact].ex, null)}` : ''}
@@ -850,7 +914,7 @@ function dnResults(text) {
     ${sim.length ? `<section class="stack"><h2>Похожие полные примеры</h2><p class="small muted">Фразы из словаря с теми же словами. Их переводы проверены; сравните конструкцию со своей.</p>
       <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${hlWords(r.x.dendi, r.common)}</span></span><span class="rx">${esc(r.x.lit)}</span></li>`).join('')}</ul></section>` : ''}`;
 }
-const hlWords = (text, keys) => text.split(/(\s+)/).map(w => keys.includes(foldDn(w.replace(/[.,;:!?«»"()]/g, ''))) ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
+const hlWords = (text, keys) => text.split(/(\s+)/).map(w => keys.includes(looseDn(w.replace(/[.,;:!?«»"()]/g, ''))) ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
 function vParse() {
   const step = Math.max(1, Math.floor(PIDS.length / 4));
   const samples = PIDS.filter((p, i) => i % step === 0).slice(0, 4);
@@ -858,12 +922,12 @@ function vParse() {
   const dirBtn = (v, label) => `<button type="button" class="pdir${parseDir === v ? ' on' : ''}" data-dir="${v}" aria-pressed="${parseDir === v}">${label}</button>`;
   return `<div class="stack" style="gap:18px">
     <h1>Перевод фразы</h1>
-    <p>Вставьте предложение на денди или по-русски. Для каждого слова сайт найдёт статьи словаря и значения из разборов полных примеров, а ниже покажет похожие фразы с готовым проверенным переводом. На денди тон и долготу можно не набирать.</p>
+    <p>Вставьте предложение на денди или по-русски. Для каждого слова сайт найдёт статьи словаря и значения из разборов полных примеров, а ниже покажет похожие фразы с готовым проверенным переводом. На денди тон, удвоения и буквы ɛ, ɔ, ŋ можно не набирать: <span class="dn">gono</span> найдёт <span class="dn">goono</span>, <span class="dn">bene</span> — <span class="dn">bɛɛnɛ</span>. Если подходит несколько написаний, показано ближайшее к набранному, а остальные — под строкой «Другое написание».</p>
     <div class="box warn"><span class="label">Как это работает</span>Сайт показывает только то, что уже есть в словаре, и ничего не достраивает. Слово может иметь несколько значений, а грамматика денди описана не полностью, поэтому смысл фразы определяет читатель. Для русской фразы сайт не составляет предложение на денди: он показывает слова и проверенные примеры, из которых его можно собрать.</div>
     <form id="pform" class="stack" style="gap:8px">
       <div class="prow"><label for="ptext" class="label">Фраза</label><div class="pdirs" role="group" aria-label="Направление">${dirBtn('auto', 'Авто')}${dirBtn('dn', 'С денди')}${dirBtn('ru', 'С русского')}</div></div>
       <textarea id="ptext" rows="3" class="dn" spellcheck="false" placeholder="N gunda wɛndɛ ba?  или:  У тебя есть жена?">${esc(parseText)}</textarea>
-      <div class="prow"><div class="chars pchars" aria-label="Вставить букву"><button type="button" data-ch="ɛ">ɛ</button><button type="button" data-ch="ɔ">ɔ</button><button type="button" data-ch="ŋ">ŋ</button></div><button type="submit" class="btn">Найти</button></div>
+      <div class="prow"><div class="chars pchars" aria-label="Вставить букву"><button type="button" data-ch="ɛ">ɛ</button><button type="button" data-ch="ɔ">ɔ</button><button type="button" data-ch="ŋ">ŋ</button></div><div class="pbtns"><button type="button" class="btn2 pclear" title="Стереть весь текст">Очистить</button><button type="submit" class="btn">Найти</button></div></div>
       <div class="psamples"><span class="small muted">На денди:</span>${samples.map(p => `<button type="button" class="psample dn" data-p="${p}" data-f="dendi">${esc(PID[p].ex.dendi)}</button>`).join('')}</div>
       <div class="psamples"><span class="small muted">По-русски:</span>${ruSamples.map(p => `<button type="button" class="psample" data-p="${p}" data-f="lit">${esc(PID[p].ex.lit)}</button>`).join('')}</div>
     </form>
@@ -871,7 +935,7 @@ function vParse() {
   </div>`;
 }
 function runParse(text) {
-  if (text !== parseText) RU_CHOICE.clear();
+  if (text !== parseText) { RU_CHOICE.clear(); DN_CHOICE.clear(); }
   parseText = text;
   try { localStorage.setItem('dn-parse', text); localStorage.setItem('dn-pdir', parseDir); } catch (_) {}
   const el = document.getElementById('pres'); if (el) el.innerHTML = parseResults(text);
@@ -883,7 +947,9 @@ if (document.addEventListener) {
     const s = ev.target.closest && ev.target.closest('.psample');
     if (s) { const t = PID[s.dataset.p].ex[s.dataset.f]; document.getElementById('ptext').value = t; runParse(t); return; }
     const pk = ev.target.closest && ev.target.closest('.pick');
-    if (pk) { RU_CHOICE.set(pk.dataset.key, pk.dataset.lemma); runParse(document.getElementById('ptext').value); return; }
+    if (pk) { if (pk.dataset.sp) DN_CHOICE.set(pk.dataset.key, pk.dataset.sp); else RU_CHOICE.set(pk.dataset.key, pk.dataset.lemma); runParse(document.getElementById('ptext').value); return; }
+    const cl = ev.target.closest && ev.target.closest('.pclear');
+    if (cl) { const ta = document.getElementById('ptext'); ta.value = ''; runParse(''); ta.focus(); return; }
     const d = ev.target.closest && ev.target.closest('.pdir');
     if (d) {
       parseDir = d.dataset.dir;
@@ -923,7 +989,10 @@ window.addEventListener('hashchange', route);
 
 const qEl = document.getElementById('q');
 let tmr;
+const qClr = document.getElementById('qclear');
+qClr.addEventListener('click', () => { qEl.value = ''; qEl.dispatchEvent(new Event('input')); qEl.focus(); });
 qEl.addEventListener('input', () => {
+  qClr.hidden = !qEl.value;
   clearTimeout(tmr);
   tmr = setTimeout(() => {
     query = qEl.value;

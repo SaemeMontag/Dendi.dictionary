@@ -206,6 +206,15 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .btn { font: inherit; font-weight: 500; padding: 8px 18px; border-radius: 8px; border: 0; background: var(--accent); color: var(--paper); cursor: pointer; }
 .btn:hover { filter: brightness(1.1); }
+.btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+.btn2:hover { border-color: var(--accent); }
+.pbtns { display: flex; gap: 8px; }
+.qwrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.qwrap input[type=search] { padding-right: 36px; }
+.qwrap input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.qclear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.qclear:hover { color: var(--ink); background: var(--line); }
+.qclear[hidden] { display: none; }
 .psamples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .psample { font: inherit; font-family: var(--f-dendi); font-size: .92rem; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .psample:hover { border-color: var(--accent); }
