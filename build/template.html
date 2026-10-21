@@ -213,6 +213,12 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .btn:hover { filter: brightness(1.1); }
 .contacts p + p { margin-top: 10px; }
 .contacts a { font-size: 1.05rem; overflow-wrap: anywhere; }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: .92rem; text-decoration: none; background: var(--paper); }
+.fchip:hover { border-color: var(--accent); text-decoration: none; }
+.fchip .n { color: var(--muted); font-size: .82rem; }
+.fchip.on { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.fchip.on .n { color: var(--paper); opacity: .85; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -476,11 +482,23 @@ function vWord(n) {
   </article>`;
 }
 
-function vExamples(focus) {
+const exSrc = p => (PID[p].ex.source.match(CODE_RE) || ['—'])[0];
+function vExamples(focus, src) {
+  const cnt = {};
+  PIDS.forEach(p => { const c = exSrc(p); cnt[c] = (cnt[c] || 0) + 1; });
+  const codes = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
+  if (src && !cnt[src]) src = null;
+  const list = src ? PIDS.filter(p => exSrc(p) === src) : PIDS;
+  const chip = (c, label, n) => `<a class="fchip${(c || null) === (src || null) ? ' on' : ''}" href="#${c ? 'ex-' + encodeURIComponent(c) : 'examples'}"${(c || null) === (src || null) ? ' aria-current="true"' : ''}>${label} <span class="n">${n}</span></a>`;
+  const srcInfo = src && SRC_IDS[src] ? ` <a class="small" href="#${SRC_IDS[src]}">Об источнике ${esc(src)}</a>` : '';
   return `<div class="stack" style="gap:22px">
     <h1>Полные примеры</h1>
     <p>${ST.ex} ${plural(ST.ex, 'уникальный пример', 'уникальных примера', 'уникальных примеров')}: полная фраза денди, опубликованный русский перевод (если он есть), авторский дословный перевод и разбор по словам. Один пример может приводиться в нескольких статьях; номер П остаётся тем же.</p>
-    <div class="exs">${PIDS.map(p => { const x = PID[p].ex; return `<div id="p${p.slice(1)}" class="${'p' + p.slice(1) === focus ? 'focus' : ''}">${exCard(x, null)}<p class="small">Статьи: ${PID[p].entries.map(wordLink).join(', ')}</p></div>`; }).join('')}</div>
+    <div class="stack" style="gap:8px"><span class="label">Источник фразы</span>
+      <nav class="fchips" aria-label="Фильтр по источнику">${chip(null, 'Все', PIDS.length)}${codes.map(c => chip(c, esc(c), cnt[c])).join('')}</nav>
+      ${src ? `<p class="small muted">Показано ${list.length} ${plural(list.length, 'пример', 'примера', 'примеров')} из источника ${esc(src)}.${srcInfo}</p>` : ''}
+    </div>
+    <div class="exs">${list.map(p => { const x = PID[p].ex; return `<div id="p${p.slice(1)}" class="${'p' + p.slice(1) === focus ? 'focus' : ''}">${exCard(x, null)}<p class="small">Статьи: ${PID[p].entries.map(wordLink).join(', ')}</p></div>`; }).join('')}</div>
   </div>`;
 }
 
@@ -516,8 +534,8 @@ function vSources(hl) {
   return `<div class="stack" style="gap:22px">
     <h1>Источники</h1>
     <section class="stack"><h2>Откуда взяты полные примеры</h2>
-      <div class="bars" role="img" aria-label="Число полных примеров по источникам">${dist.map(([c, n]) => `<div class="brow">${SRC_IDS[c] ? `<a class="code" href="#${SRC_IDS[c]}">${c}</a>` : `<span class="code">${c}</span>`}<div class="track"><div class="fill" style="width:${(n / max * 100).toFixed(1)}%"></div></div><span class="v">${n}</span></div>`).join('')}</div>
-      <p class="small muted">Число уникальных полных примеров (П1–П${PIDS.length ? PIDS[PIDS.length - 1].slice(1) : 0}) по источнику фразы. NT95 и NT18 — разные издания одной переводческой традиции.</p>
+      <div class="bars" aria-label="Число полных примеров по источникам">${dist.map(([c, n]) => `<div class="brow">${SRC_IDS[c] ? `<a class="code" href="#${SRC_IDS[c]}">${c}</a>` : `<span class="code">${c}</span>`}<div class="track"><div class="fill" style="width:${(n / max * 100).toFixed(1)}%"></div></div><a class="v" href="#ex-${encodeURIComponent(c)}" title="Показать примеры из ${c}">${n}</a></div>`).join('')}</div>
+      <p class="small muted">Число уникальных полных примеров (П1–П${PIDS.length ? PIDS[PIDS.length - 1].slice(1) : 0}) по источнику фразы. NT95 и NT18 — разные издания одной переводческой традиции. Нажмите на число, чтобы увидеть примеры из этого источника.</p>
     </section>
     <section class="stack"><h2>Библиография</h2>
       <div class="srcs">${[...D.sources, ...(D.rst ? [D.rst] : [])].map(s => `<article id="${s.id}" class="${s.id === hl ? 'hl' : ''}"><span class="c">${esc(s.code.split(' — ')[0])}</span><div class="t md"><p><b>${esc(s.title)}</b></p>${blocks(s.blocks)}${s.url ? `<a class="u" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : ''}</div></article>`).join('')}</div>
@@ -989,6 +1007,7 @@ function route() {
   else if ((m = h.match(/^l(\d+)$/))) { html = vLetter(+m[1]); L = ALPHA[+m[1]]; }
   else if ((m = h.match(/^g(\d+)$/))) { html = vHome(); nav = 'home'; scrollTo = h; L = ALPHA[+m[1]]; }
   else if ((m = h.match(/^p(\d+)$/))) { html = vExamples(h); nav = 'examples'; scrollTo = h; title = `П${m[1]} · Словарь денди`; }
+  else if ((m = h.match(/^ex-(.+)$/))) { const c = decodeURIComponent(m[1]); html = vExamples(null, c); nav = 'examples'; title = `Примеры: ${c} · Словарь денди`; }
   else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }

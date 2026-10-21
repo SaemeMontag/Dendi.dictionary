@@ -208,6 +208,12 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .btn:hover { filter: brightness(1.1); }
 .contacts p + p { margin-top: 10px; }
 .contacts a { font-size: 1.05rem; overflow-wrap: anywhere; }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: .92rem; text-decoration: none; background: var(--paper); }
+.fchip:hover { border-color: var(--accent); text-decoration: none; }
+.fchip .n { color: var(--muted); font-size: .82rem; }
+.fchip.on { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.fchip.on .n { color: var(--paper); opacity: .85; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
