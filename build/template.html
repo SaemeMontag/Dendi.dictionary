@@ -228,6 +228,14 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .qclear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; }
 .qclear:hover { color: var(--ink); background: var(--line); }
 .qclear[hidden] { display: none; }
+.qsug { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; margin: 0; padding: 4px; list-style: none; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: min(60vh, 420px); overflow-y: auto; }
+.qsug[hidden] { display: none; }
+.qsug li { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.qsug li.on, .qsug li:hover { background: var(--line); }
+.qsug .st { font-weight: 500; color: var(--ink); }
+.qsug .sf { font-family: var(--f-dendi); color: var(--muted); font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.qsug .sf mark { background: none; color: var(--accent); font-weight: 600; }
+.qsug .sn { margin-left: auto; flex: none; font-size: .78rem; color: var(--muted); white-space: nowrap; }
 .psamples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .psample { font: inherit; font-family: var(--f-dendi); font-size: .92rem; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .psample:hover { border-color: var(--accent); }
@@ -270,7 +278,7 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 <div class="bar">
   <div class="wrap">
     <form class="search" id="sform" role="search">
-      <div class="qwrap"><input type="search" id="q" placeholder="Слово по-русски или на денди: вода, hari, kpaarɛ…" autocomplete="off" aria-label="Поиск по словарю"><button type="button" class="qclear" id="qclear" title="Очистить поле" aria-label="Очистить поле" hidden>×</button></div>
+      <div class="qwrap"><input type="search" id="q" placeholder="Слово по-русски или на денди: вода, hari, kpaarɛ…" autocomplete="off" aria-label="Поиск по словарю" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="qsug"><button type="button" class="qclear" id="qclear" title="Очистить поле" aria-label="Очистить поле" hidden>×</button><ul class="qsug" id="qsug" role="listbox" aria-label="Подходящие статьи" hidden></ul></div>
       <div class="chars" aria-label="Вставить букву">
         <button type="button" data-ch="ɛ" title="Вставить ɛ">ɛ</button><button type="button" data-ch="ɔ" title="Вставить ɔ">ɔ</button><button type="button" data-ch="ŋ" title="Вставить ŋ">ŋ</button>
       </div>
@@ -1026,8 +1034,51 @@ const qEl = document.getElementById('q');
 let tmr;
 const qClr = document.getElementById('qclear');
 qClr.addEventListener('click', () => { qEl.value = ''; qEl.dispatchEvent(new Event('input')); qEl.focus(); });
+// выпадающий список подходящих статей: по началу русского заголовка (или слова в нём) и по началу дендийской формы
+const qSug = document.getElementById('qsug');
+let sugList = [], sugAt = -1;
+const NEX = new Map(E.map(e => [e, new Set(examplesOf(e).map(x => x.pid)).size]));
+function suggest(q) {
+  q = q.trim(); if (!q) return [];
+  const qr = foldRu(q), qk = foldDn(q), ql = looseDn(q), out = [];
+  IDX.forEach(r => {
+    let m = 0, form = null;
+    if (isRu(q)) {
+      if (r.t.startsWith(qr)) m = 3;
+      else if (r.t.split(/[\s;,:()\/-]+/).some(w => w.startsWith(qr))) m = 2;
+    } else if (qk) {
+      for (const f of r.forms) {
+        const mm = f.k.startsWith(qk) ? 3 : ql && f.lk.startsWith(ql) ? 2 : 0;
+        if (mm > m || (mm && mm === m && spellDist(q, f.raw) < spellDist(q, form))) { m = mm; form = f.raw; }
+      }
+    }
+    if (m) out.push({ e: r.e, m, form, n: NEX.get(r.e) || 0 });
+  });
+  return out.sort((a, b) => b.n - a.n || b.m - a.m || a.e.title.localeCompare(b.e.title, 'ru')).slice(0, 10);
+}
+function drawSug() {
+  const open = sugList.length > 0 && document.activeElement === qEl;
+  qSug.hidden = !open; qEl.setAttribute('aria-expanded', open);
+  if (!open) { qEl.removeAttribute('aria-activedescendant'); return; }
+  qSug.innerHTML = sugList.map((s, i) => {
+    const forms = s.e.variants.slice(0, 3).map(v => s.form && variantForms(v).includes(s.form) ? `<mark>${esc(v.form)}</mark>` : esc(v.form)).join(', ');
+    return `<li id="qs${i}" role="option" data-n="${s.e.n}" class="${i === sugAt ? 'on' : ''}" aria-selected="${i === sugAt}"><span class="st">${esc(s.e.title)}</span><span class="sf">${forms}</span><span class="sn" title="Полных примеров в статье">${s.n ? s.n + ' ' + plural(s.n, 'пример', 'примера', 'примеров') : 'нет примеров'}</span></li>`;
+  }).join('');
+  if (sugAt >= 0) { qEl.setAttribute('aria-activedescendant', 'qs' + sugAt); const li = document.getElementById('qs' + sugAt); if (li) li.scrollIntoView({ block: 'nearest' }); }
+}
+function goSug(n) { clearTimeout(tmr); sugList = []; sugAt = -1; drawSug(); qEl.value = ''; qClr.hidden = true; query = ''; location.hash = 'w' + n; qEl.blur(); }
+qSug.addEventListener('mousedown', ev => { const li = ev.target.closest('li'); if (li) { ev.preventDefault(); goSug(li.dataset.n); } });
+qEl.addEventListener('keydown', ev => {
+  if (qSug.hidden) return;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); const k = sugList.length; sugAt = ev.key === 'ArrowDown' ? (sugAt + 1) % k : (sugAt - 1 + k) % k; drawSug(); }
+  else if (ev.key === 'Escape') { sugList = []; sugAt = -1; drawSug(); }
+  else if (ev.key === 'Enter' && sugAt >= 0) { ev.preventDefault(); goSug(sugList[sugAt].e.n); }
+});
+qEl.addEventListener('blur', () => setTimeout(() => { qSug.hidden = true; qEl.setAttribute('aria-expanded', 'false'); }, 120));
+qEl.addEventListener('focus', () => { sugList = suggest(qEl.value); sugAt = -1; drawSug(); });
 qEl.addEventListener('input', () => {
   qClr.hidden = !qEl.value;
+  sugList = suggest(qEl.value); sugAt = -1; drawSug();
   clearTimeout(tmr);
   tmr = setTimeout(() => {
     query = qEl.value;

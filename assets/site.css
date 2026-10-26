@@ -223,6 +223,14 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .qclear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; }
 .qclear:hover { color: var(--ink); background: var(--line); }
 .qclear[hidden] { display: none; }
+.qsug { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; margin: 0; padding: 4px; list-style: none; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: min(60vh, 420px); overflow-y: auto; }
+.qsug[hidden] { display: none; }
+.qsug li { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.qsug li.on, .qsug li:hover { background: var(--line); }
+.qsug .st { font-weight: 500; color: var(--ink); }
+.qsug .sf { font-family: var(--f-dendi); color: var(--muted); font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.qsug .sf mark { background: none; color: var(--accent); font-weight: 600; }
+.qsug .sn { margin-left: auto; flex: none; font-size: .78rem; color: var(--muted); white-space: nowrap; }
 .psamples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .psample { font: inherit; font-family: var(--f-dendi); font-size: .92rem; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .psample:hover { border-color: var(--accent); }
