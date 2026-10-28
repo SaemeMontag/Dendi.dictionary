@@ -219,6 +219,12 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .fchip .n { color: var(--muted); font-size: .82rem; }
 .fchip.on { background: var(--accent); border-color: var(--accent); color: var(--paper); }
 .fchip.on .n { color: var(--paper); opacity: .85; }
+.ovl ul { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 6px; }
+.ovl li { line-height: 1.45; }
+.ovl a { text-decoration: none; }
+.ovl a:hover .dn { text-decoration: underline; }
+.ovl .vl { display: inline-block; min-width: 2.2em; color: var(--muted); font-weight: 600; }
+.ovl .dn { font-family: var(--f-dendi); }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -447,7 +453,7 @@ function exCard(x, here, num) {
     <div class="exh"><span class="pidtag">${num ? `Пример ${num} · ` : ''}${x.pid}</span><span class="src">${extLink(x.source, x.source_url)}</span></div>
     <p class="dsent">${esc(x.dendi)}</p>
     <dl class="exf">
-      <dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${x.pub ? esc(x.pub) + (x.pub_url ? ` <a class="small" href="${esc(x.pub_url)}" target="_blank" rel="noopener">${x.rst ? 'текст' : esc(x.pub_label || 'текст')}</a>` : '') : '<span class="muted">Опубликованного русского перевода нет.</span>'}</dd>
+      ${x.pub ? `<dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${esc(x.pub) + (x.pub_url ? ` <a class="small" href="${esc(x.pub_url)}" target="_blank" rel="noopener">${x.rst ? 'текст' : esc(x.pub_label || 'текст')}</a>` : '')}</dd>` : ''}
       <dt>Дословный перевод</dt><dd>${esc(x.lit)}</dd>
       <dt>Разбор по словам</dt><dd>${parseChips(x.parse, x.pid)}</dd>
       ${x.note ? `<dt>Примечание</dt><dd>${rich(x.note)}</dd>` : ''}
@@ -465,7 +471,8 @@ function vWord(n) {
   const meta = `<span>№ ${e.n}</span>${e.kind === 'swadesh' ? `<span>Сводеш № ${e.swadesh}</span>` : '<span class="tag info">дополнительная лексика</span>'}`
     + (e.variants.length > 1 ? `<span>${e.variants.length} ${plural(e.variants.length, 'вариант', 'варианта', 'вариантов')}</span>` : '')
     + `<span>${nEx ? `${nEx} ${plural(nEx, 'полный пример', 'полных примера', 'полных примеров')}` : 'полных примеров пока нет'}</span>`;
-  const vars = e.variants.map(v => `<section class="variant">
+  const ov = (e.overview || []).length > 1 ? `<nav class="box ovl" aria-label="Варианты"><span class="label">Варианты и значения</span><ul>${e.overview.map(o => `<li>${o.anchor ? `<a href="#w${e.n}" data-v="${esc(o.label)}"><span class="vl">${esc(o.label)}</span> <span class="dn">${esc(o.form)}</span></a>` : `${o.label ? `<span class="vl">${esc(o.label)}</span> ` : ''}<span class="dn">${esc(o.form)}</span>`}${o.note ? ` — ${rich(o.note)}` : ''}</li>`).join('')}</ul></nav>` : '';
+  const vars = e.variants.map(v => `<section class="variant"${v.label ? ` id="v-${esc(v.label)}"` : ''}>
       <div class="vh">${v.label ? `<span class="vl">${v.label}</span>` : ''}<span class="vf">${esc(v.form)}</span></div>
       ${v.notes.map(p => `<p>${rich(p)}</p>`).join('')}
       ${v.examples.length ? `<div class="exs">${v.examples.map(x => exCard(x, e, x.k)).join('')}</div>` : `<p class="small muted">${esc(v.status || 'Полного примера с дословным разбором пока нет.')}</p>`}
@@ -478,6 +485,7 @@ function vWord(n) {
     <div class="crumbs"><a href="#home">Словник</a><span>›</span><a href="#l${ALPHA.indexOf(e.letter)}">${e.letter}</a></div>
     <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div></div>
     ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
+    ${ov}
     ${e.meaning ? `<div class="box"><span class="label">Значение и употребление</span>${rich(e.meaning)}</div>` : ''}
     ${(e.notes || []).map(t => `<p>${rich(t)}</p>`).join('')}
     ${vars}
@@ -1029,6 +1037,11 @@ function route() {
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
+document.addEventListener('click', ev => {
+  const a = ev.target.closest && ev.target.closest('.ovl a[data-v]');
+  if (!a) return;
+  ev.preventDefault(); const sec = document.getElementById('v-' + a.dataset.v); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
 
 const qEl = document.getElementById('q');
 let tmr;

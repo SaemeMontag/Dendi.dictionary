@@ -202,7 +202,7 @@ def build_data(vault):
     # --- статьи ---
     entries = []
     for name, (n, title, ls) in sorted(art_lines.items(), key=lambda kv: kv[1][0]):
-        e = {'n': n, 'title': title, 'kind': 'extra', 'variants': [], 'extra_refs': [], 'linked': [], 'notes': []}
+        e = {'n': n, 'title': title, 'kind': 'extra', 'variants': [], 'extra_refs': [], 'linked': [], 'notes': [], 'overview': []}
         var = None
         mode = 'pre'
         pending = []
@@ -227,6 +227,13 @@ def build_data(vault):
                 mode = 'overview'; continue
             if mode == 'overview':
                 if l.startswith('- '):
+                    item = l[2:].strip()
+                    wm = WIKI.match(item)
+                    text = ((wm[3] or _stem(wm[2])) if wm else re.split(r'\s+—\s+', item, 1)[0]).strip()
+                    rest = item[wm.end():] if wm else (item[len(text):] if item.startswith(text) else '')
+                    note_txt = re.sub(r'^\s*—\s*', '', rest).strip()
+                    lm = re.match(r'^([IVXLC]+)\.\s+(.+)$', text)
+                    e['overview'].append({'label': lm[1] if lm else '', 'form': lm[2] if lm else text, 'note': L.inline(note_txt)})
                     continue
                 mode = 'pre' if var is None else 'var'
             if re.fullmatch(r'Сводеш № (\d+)', plain):
@@ -293,6 +300,13 @@ def build_data(vault):
             note(plain if not l.startswith('#') else plain)
         if pending and var is not None:
             var['notes'] += pending
+        # вариант без заголовка с римской цифрой получает номер из краткого обзора, если форма совпадает
+        for v in e['variants']:
+            if not v['label']:
+                o = next((o for o in e['overview'] if o['label'] and o['form'] == v['form']), None)
+                if o and o['label'] not in {w['label'] for w in e['variants']}: v['label'] = o['label']
+        have = {v['label'] for v in e['variants'] if v['label']}
+        for o in e['overview']: o['anchor'] = o['label'] in have
         # Примеры из раздела «Полные примеры по ссылкам…» входят в заявленное число варианта.
         # Если недосчитался ровно один вариант и ровно на столько примеров, сколько в этом разделе, —
         # примеры относятся к нему: показываем их под вариантом.

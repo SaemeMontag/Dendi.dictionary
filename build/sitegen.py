@@ -155,15 +155,15 @@ def ex_card(x, ids, p, pid_entries, here, plinks=None, linked=False):
             lab = 'текст' if x.get('rst') else e_(x.get('pub_label') or 'текст')
             pub_html += f' <a class="small" href="{e_(x["pub_url"])}" target="_blank" rel="noopener">{lab}</a>'
     else:
-        pub_html = '<span class="muted">Опубликованного русского перевода нет.</span>'
+        pub_html = ''
     others = [o for o in pid_entries.get(x['pid'], []) if o is not here]
     lead = ''.join(f'<p class="small">{link_src(t, ids, p)}</p>' for t in (x.get('lead') or []))
     tag = e_(x['pid']) if linked else f'Пример {x["k"]} · {e_(x["pid"])}'
     s = (lead + f'<article class="exc"><div class="exh"><span class="pidtag">{tag}</span>'
          f'<span class="src">{ext(x["source"], x.get("source_url"))}</span></div>'
          f'<p class="dsent" lang="ddn">{e_(x["dendi"])}</p><dl class="exf">'
-         f'<dt>Опубликованный перевод{rst_tag}</dt><dd>{pub_html}</dd>'
-         f'<dt>Дословный перевод</dt><dd>{e_(x["lit"])}</dd>'
+         + (f'<dt>Опубликованный перевод{rst_tag}</dt><dd>{pub_html}</dd>' if pub_html else '')
+         + f'<dt>Дословный перевод</dt><dd>{e_(x["lit"])}</dd>'
          f'<dt>Разбор по словам</dt><dd>{chips(x["parse"], (plinks or {}).get(x["pid"]))}</dd>')
     if x.get('note'): s += f'<dt>Примечание</dt><dd>{link_src(x["note"], ids, p)}</dd>'
     if x.get('extra'): s += '<dt>Дополнительно</dt><dd>' + '<br>'.join(link_src(t, ids, p) for t in x['extra']) + '</dd>'
@@ -190,11 +190,15 @@ def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
              f'<div class="entry-head"><h1>{e_(e["title"])}</h1><div class="meta">{meta}</div></div>']
     if e.get('unestablished'):
         parts.append(f'<div class="box warn"><span class="label">Написание не установлено</span>{e_(e["unestablished"])}</div>')
+    if len(e.get('overview') or []) > 1:
+        lis = ''.join('<li>' + (f'<a href="#v-{e_(o["label"])}"><span class="vl">{e_(o["label"])}</span> <span class="dn" lang="ddn">{e_(o["form"])}</span></a>' if o.get('anchor') else (f'<span class="vl">{e_(o["label"])}</span> ' if o['label'] else '') + f'<span class="dn" lang="ddn">{e_(o["form"])}</span>')
+                      + (f' — {link_src(o["note"], ids, p)}' if o['note'] else '') + '</li>' for o in e['overview'])
+        parts.append(f'<nav class="box ovl" aria-label="Варианты"><span class="label">Варианты и значения</span><ul>{lis}</ul></nav>')
     if e.get('meaning'):
         parts.append(f'<div class="box"><span class="label">Значение и употребление</span>{link_src(e["meaning"], ids, p)}</div>')
     parts += [f'<p>{link_src(t, ids, p)}</p>' for t in e.get('notes', [])]
     for v in e['variants']:
-        s = '<section class="variant"><div class="vh">' + (f'<span class="vl">{v["label"]}</span>' if v['label'] else '') + f'<span class="vf" lang="ddn">{e_(v["form"])}</span></div>'
+        s = '<section class="variant"' + (f' id="v-{e_(v["label"])}"' if v['label'] else '') + '><div class="vh">' + (f'<span class="vl">{v["label"]}</span>' if v['label'] else '') + f'<span class="vf" lang="ddn">{e_(v["form"])}</span></div>'
         s += ''.join(f'<p>{link_src(n, ids, p)}</p>' for n in v['notes'])
         if v['examples']:
             s += '<div class="exs">' + ''.join(ex_card(x, ids, p, pid_entries, e, plinks) for x in v['examples']) + '</div>'
