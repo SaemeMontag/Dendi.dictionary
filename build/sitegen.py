@@ -150,7 +150,7 @@ def chips(p, links=None, prefix=''):
 def ex_card(x, ids, p, pid_entries, here, plinks=None, linked=False):
     rst_tag = ' <span class="tag info">Синодальный</span>' if x.get('rst') else ''
     if x.get('pub'):
-        pub_html = e_(x['pub'])
+        pub_html = (f'<span class="small muted">{e_(x["pub_q"])}:</span> ' if x.get('pub_q') else '') + e_(x['pub'])
         if x.get('pub_url'):
             lab = 'текст' if x.get('rst') else e_(x.get('pub_label') or 'текст')
             pub_html += f' <a class="small" href="{e_(x["pub_url"])}" target="_blank" rel="noopener">{lab}</a>'

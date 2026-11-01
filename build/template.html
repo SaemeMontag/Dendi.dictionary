@@ -453,7 +453,7 @@ function exCard(x, here, num) {
     <div class="exh"><span class="pidtag">${num ? `Пример ${num} · ` : ''}${x.pid}</span><span class="src">${extLink(x.source, x.source_url)}</span></div>
     <p class="dsent">${esc(x.dendi)}</p>
     <dl class="exf">
-      ${x.pub ? `<dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${esc(x.pub) + (x.pub_url ? ` <a class="small" href="${esc(x.pub_url)}" target="_blank" rel="noopener">${x.rst ? 'текст' : esc(x.pub_label || 'текст')}</a>` : '')}</dd>` : ''}
+      ${x.pub ? `<dt>Опубликованный перевод${x.rst ? ' <span class="tag info">Синодальный</span>' : ''}</dt><dd>${(x.pub_q ? `<span class="small muted">${esc(x.pub_q)}:</span> ` : '') + esc(x.pub) + (x.pub_url ? ` <a class="small" href="${esc(x.pub_url)}" target="_blank" rel="noopener">${x.rst ? 'текст' : esc(x.pub_label || 'текст')}</a>` : '')}</dd>` : ''}
       <dt>Дословный перевод</dt><dd>${esc(x.lit)}</dd>
       <dt>Разбор по словам</dt><dd>${parseChips(x.parse, x.pid)}</dd>
       ${x.note ? `<dt>Примечание</dt><dd>${rich(x.note)}</dd>` : ''}

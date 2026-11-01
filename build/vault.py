@@ -29,6 +29,8 @@ SRC_HEADERS = ('Источники формы и дополнительные к
 XREF_HEADER = 'Дополнительные источниковые привязки:'
 LINKED_HEADS = ('Полные примеры по ссылкам исходного разбора',)
 OVERVIEW = 'Варианты и значения'
+# «Опубликованный русский перевод: …», «… (Синодальный, полный стих): …», «… — Синодальный, Гал 5:15 (полный стих): …»
+PUB_LINE = re.compile(r'^Опубликованный русский перевод(?:\s*\((?P<q1>[^)]*)\)|\s+—\s+(?P<q2>.+?))?:\s+(?P<t>.+)$')
 
 
 class VaultError(Exception):
@@ -178,7 +180,16 @@ def build_data(vault):
             if m and m[1].startswith('Источник:'):
                 x['source'] = m[1][len('Источник:'):].strip(); x['source_url'] = m[2]; continue
             if m and 'параллельный текст' in m[1]:
-                x['pub_label'] = m[1]; x['pub_url'] = m[2]; x['rst'] = m[1].startswith('Синодальный'); continue
+                x['pub_label'] = m[1]; x['pub_url'] = m[2]
+                x['rst'] = x.get('rst') or m[1].startswith('Синодальный') or 'Синодальн' in m[1] or bool(re.search(r'\bRST\b', m[1])); continue
+            pm = PUB_LINE.match(l)
+            if pm and 'pub' not in x:
+                q = (pm['q1'] or pm['q2'] or '').strip()
+                x['pub'] = WIKI.sub(lambda mm: (mm[3] or _stem(mm[2])).strip(), pm['t'])
+                if re.match(r'^Синодальн', q):
+                    x['rst'] = True; q = re.sub(r'^Синодальн\w*,?\s*', '', q)
+                if q: x['pub_q'] = q
+                continue
             for pre, key in (('Денди: ', 'dendi'), ('Источник: ', 'source'), ('Опубликованный русский перевод: ', 'pub'),
                              ('Авторский дословный перевод: ', 'lit'), ('Разбор по словам: ', 'parse'), ('Примечание: ', 'note')):
                 if l.startswith(pre) and key not in x:
