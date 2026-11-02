@@ -987,9 +987,6 @@ function dnResults(text) {
 }
 const hlWords = (text, keys) => text.split(/(\s+)/).map(w => keys.includes(looseDn(w.replace(/[.,;:!?«»"()]/g, ''))) ? `<mark>${esc(w)}</mark>` : esc(w)).join('');
 function vParse() {
-  const step = Math.max(1, Math.floor(PIDS.length / 4));
-  const samples = PIDS.filter((p, i) => i % step === 0).slice(0, 4);
-  const ruSamples = PIDS.filter((p, i) => i % step === Math.floor(step / 2)).slice(0, 3);
   const dirBtn = (v, label) => `<button type="button" class="pdir${parseDir === v ? ' on' : ''}" data-dir="${v}" aria-pressed="${parseDir === v}">${label}</button>`;
   return `<div class="stack" style="gap:18px">
     <h1>Перевод фразы</h1>
@@ -999,8 +996,6 @@ function vParse() {
       <div class="prow"><label for="ptext" class="label">Фраза</label><div class="pdirs" role="group" aria-label="Направление">${dirBtn('auto', 'Авто')}${dirBtn('dn', 'С денди')}${dirBtn('ru', 'С русского')}</div></div>
       <textarea id="ptext" rows="3" class="dn" spellcheck="false" placeholder="N gunda wɛndɛ ba?  или:  У тебя есть жена?">${esc(parseText)}</textarea>
       <div class="prow"><div class="chars pchars" aria-label="Вставить букву"><button type="button" data-ch="ɛ">ɛ</button><button type="button" data-ch="ɔ">ɔ</button><button type="button" data-ch="ŋ">ŋ</button></div><div class="pbtns"><button type="button" class="btn2 pclear" title="Стереть весь текст">Очистить</button><button type="submit" class="btn">Найти</button></div></div>
-      <div class="psamples"><span class="small muted">На денди:</span>${samples.map(p => `<button type="button" class="psample dn" data-p="${p}" data-f="dendi">${esc(PID[p].ex.dendi)}</button>`).join('')}</div>
-      <div class="psamples"><span class="small muted">По-русски:</span>${ruSamples.map(p => `<button type="button" class="psample" data-p="${p}" data-f="lit">${esc(PID[p].ex.lit)}</button>`).join('')}</div>
     </form>
     <div id="pres" class="stack" style="gap:16px" aria-live="polite">${parseResults(parseText)}</div>
   </div>`;
