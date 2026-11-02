@@ -225,6 +225,12 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .mdt th, .mdt td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
 .mdt th { background: var(--bg); font-weight: 600; }
 .md ol.mdl { padding-left: 1.4em; }
+.pgex { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin: 14px 0; background: var(--paper); }
+.pgex.hl, .pgex:target { outline: 2px solid var(--accent); }
+.pgh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 6px; }
+.pgtag { background: var(--accent); color: var(--paper); }
+.pgt { font-weight: 600; }
+.pgex .md > p:first-child { margin-top: 0; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }

@@ -73,6 +73,8 @@ class Linker:
             return f'⟦p:{name[1:]}|{text}⟧'
         if folder == 'Источники' and name in self.sources:
             return f'⟦s:{self.sources[name]}|{text}⟧'
+        if folder == 'Грамматика/Примеры' and re.fullmatch(r'ПГ\d+', name):
+            return f'⟦q:{name[2:]}|{text}⟧'
         if folder == 'Грамматика' and name in self.grammar:
             return f'⟦g:{self.grammar[name]}|{text}⟧'
         if not folder and name == 'Введение':
@@ -106,6 +108,10 @@ def _blocks(lines, linker, skip_first_h1=True):
                 tbl['rows'].append([linker.inline(c) for c in cells])
             continue
         tbl = None
+        pg = re.match(r'^!\[\[Грамматика/Примеры/(ПГ\d+)(?:\|[^\]]*)?\]\]$', l)
+        if pg:
+            out.append({'t': 'pg', 'id': pg[1]})
+            continue
         if l.startswith('!['):
             continue
         m = re.match(r'^(#{1,6})\s+(.*)$', l)
@@ -378,11 +384,23 @@ def build_data(vault):
     # --- введение и грамматика ---
     intro = _blocks(_lines(os.path.join(vault, 'Введение.md')), L)
     grammar = []
+    # отдельная серия примеров грамматики ПГ (Грамматика/Примеры/ПГN.md); в словарные статьи и раздел «Примеры» не входит
+    pg = {}
+    pgdir = os.path.join(gdir, 'Примеры')
+    if os.path.isdir(pgdir):
+        for fn in sorted(os.listdir(pgdir), key=lambda f: int(re.sub(r'\D', '', f) or 0)):
+            mm = re.fullmatch(r'(ПГ\d+)\.md', fn)
+            if not mm:
+                continue
+            ls = _lines(os.path.join(pgdir, fn))
+            title = re.sub(r'^#\s+', '', ls[0]) if ls and ls[0].startswith('# ') else mm[1]
+            title = re.sub(r'^' + mm[1] + r'\s*[—–-]\s*', '', title)
+            pg[mm[1]] = {'id': mm[1], 'title': title[:1].upper() + title[1:], 'blocks': _blocks(ls, L)}
     for g in g_names:
         ls = _lines(os.path.join(gdir, g + '.md'))
         title = re.sub(r'^#\s+', '', ls[0]) if ls and ls[0].startswith('# ') else g
         grammar.append({'id': L.grammar[g], 'title': title, 'index': g == g_index, 'blocks': _blocks(ls, L)})
 
     data = {'meta': {'intro': intro}, 'grammar': grammar, 'entries': entries, 'sources': sources,
-            'rst': rst, 'plinks': plinks}
+            'rst': rst, 'plinks': plinks, 'pg': pg}
     return data, problems, warnings

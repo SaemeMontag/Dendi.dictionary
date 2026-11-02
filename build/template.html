@@ -230,6 +230,12 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .mdt th, .mdt td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
 .mdt th { background: var(--bg); font-weight: 600; }
 .md ol.mdl { padding-left: 1.4em; }
+.pgex { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin: 14px 0; background: var(--paper); }
+.pgex.hl, .pgex:target { outline: 2px solid var(--accent); }
+.pgh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 6px; }
+.pgtag { background: var(--accent); color: var(--paper); }
+.pgt { font-weight: 600; }
+.pgex .md > p:first-child { margin-top: 0; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -362,7 +368,8 @@ const CODE_RE = new RegExp('(?<![\\wА-Яа-яЁё-])(' + Object.keys(SRC_IDS).s
 const fmt = t => t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<i>$2</i>');
 const plainRich = t => fmt(esc(t)
   .replace(CODE_RE, m => SRC_IDS[m] ? `<a class="code" href="#${SRC_IDS[m]}" title="Описание источника">${m}</a>` : m)
-  .replace(/П(\d+)/g, (m, d) => PID['П' + d] ? `<a class="pid" href="#p${d}" title="Полный пример ${m}">${m}</a>` : m));
+  .replace(/П(\d+)/g, (m, d) => PID['П' + d] ? `<a class="pid" href="#p${d}" title="Полный пример ${m}">${m}</a>` : m)
+  .replace(/ПГ(\d+)/g, (m, d) => (D.pg || {})[m] ? `<a class="pid pgid" href="#pg${d}" title="Пример грамматики ${m}">${m}</a>` : m));
 const MARK = /⟦([a-z]):([^|⟧]*)\|([^⟧]*)⟧/g;
 function rich(s) {
   s = String(s ?? ''); let out = '', last = 0, m;
@@ -375,6 +382,7 @@ function rich(s) {
     else if (k === 's') out += `<a href="#${esc(ref)}">${t}</a>`;
     else if (k === 'g') out += `<a href="#gr-${esc(ref)}">${t}</a>`;
     else if (k === 'a') out += `<a href="#about">${t}</a>`;
+    else if (k === 'q' && (D.pg || {})['ПГ' + ref]) out += `<a class="pid pgid" href="#pg${ref}">${t}</a>`;
     else if (k === 'u') out += `<a href="${esc(ref)}" target="_blank" rel="noopener">${t}</a>`;
     else out += t;
   }
@@ -390,6 +398,7 @@ function blocks(bs) {
       out += `<li>${rich(b.x)}</li>`; return;
     }
     close();
+    if (b.t === 'pg') { const g = (D.pg || {})[b.id]; if (g) out += `<aside class="pgex" id="pg${b.id.slice(2)}"><div class="pgh"><span class="pidtag pgtag">${esc(b.id)}</span><span class="pgt">${rich(g.title)}</span></div><div class="md">${blocks(g.blocks)}</div></aside>`; return; }
     if (b.t === 'table') { out += `<div class="mdt"><table><thead><tr>${b.head.map(c => `<th>${rich(c)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; return; }
     out += b.t === 'p' ? `<p>${rich(b.x)}</p>` : `<${b.t}>${rich(b.x)}</${b.t}>`;
   });
@@ -550,7 +559,7 @@ function vGrammar() {
     ${idx ? `<div class="md">${blocks(idx.blocks)}</div>` : ''}
     ${rest.length > 1 ? `<nav class="box"><span class="label">Заметки</span><ul class="mdl">${rest.map(g => `<li><a href="#gr-${g.id}">${esc(g.title)}</a></li>`).join('')}</ul></nav>` : ''}
     ${rest.map(g => `<section class="stack gnote" id="gr-${g.id}"><h2>${esc(g.title)}</h2><div class="md">${blocks(g.blocks)}</div></section>`).join('')}
-    <p class="small muted">Номера П ведут к полным примерам с переводами и разбором; все они собраны на странице <a href="#examples">«Примеры»</a>.</p>
+    <p class="small muted">Номера П ведут к полным примерам с переводами и разбором; все они собраны на странице <a href="#examples">«Примеры»</a>.${Object.keys(D.pg || {}).length ? ' Номера ПГ — отдельная серия примеров, приведённых специально для грамматики; они показаны прямо в заметках и в раздел «Примеры» не входят.' : ''}</p>
   </div>`;
 }
 
@@ -1036,6 +1045,7 @@ function route() {
   else if ((m = h.match(/^g(\d+)$/))) { html = vHome(); nav = 'home'; scrollTo = h; L = ALPHA[+m[1]]; }
   else if ((m = h.match(/^p(\d+)$/))) { html = vExamples(h); nav = 'examples'; scrollTo = h; title = `П${m[1]} · Словарь денди`; }
   else if ((m = h.match(/^ex-(.+)$/))) { const c = decodeURIComponent(m[1]); html = vExamples(null, c); nav = 'examples'; title = `Примеры: ${c} · Словарь денди`; }
+  else if ((m = h.match(/^pg(\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = `ПГ${m[1]} · Словарь денди`; }
   else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }

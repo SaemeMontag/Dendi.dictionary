@@ -51,7 +51,7 @@ def link_src(text, ids, prefix):
         out += plain(text[last:m.start()]); last = m.end()
         k, ref, t = m[1], m[2], _fmt(e_(m[3]))
         href = {'w': f'{ref}.html', 'p': f'{prefix}#p{ref}', 's': f'{prefix}#{ref}', 'g': f'{prefix}#gr-{ref}',
-                'a': f'{prefix}#about'}.get(k)
+                'a': f'{prefix}#about', 'q': f'{prefix}#pg{ref}'}.get(k)
         if k == 'u':
             out += f'<a href="{e_(ref)}" target="_blank" rel="noopener">{t}</a>'
         elif href:
