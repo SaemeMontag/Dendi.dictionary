@@ -956,9 +956,9 @@ function ruResults(text) {
   const hlRu = t => t.replace(/[а-яё]+/gi, w => ruKeys(w, false).some(k => allQ.has(k)) ? `<mark>${w}</mark>` : w);
   return `<p class="statline"><span>Найдено: <b>${ok}</b> из ${words.length}</span>${words.length - ok ? `<span>не найдено: <b>${words.length - ok}</b></span>` : ''}${amb ? `<span>неоднозначных слов: <b>${amb}</b></span>` : ''}</p>
     ${exact ? `<div class="box"><span class="label">Эта фраза есть в словаре целиком</span>Ниже её полный пример на денди с переводами и разбором.</div>${exCard(PID[exact].ex, null)}` : ''}
+    <section class="stack"><h2>Слова</h2>${amb ? '<p class="small muted">Для слов с несколькими прочтениями основное выбрано по соседним словам; другое прочтение можно открыть и выбрать вручную.</p>' : ''}<div class="ptoks">${cards.map(c => c.html).join('')}</div></section>
     ${sim.length ? `<section class="stack"><h2>Как это сказано в примерах</h2><p class="small muted">Полные фразы на денди, в переводе которых есть ваши слова в любой форме. Это проверенные цитаты, а не перевод вашей фразы.</p>
-      <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${esc(r.x.dendi)}</span></span><span class="rx">${hlRu(esc(r.x.lit))}</span></li>`).join('')}</ul></section>` : ''}
-    <section class="stack"><h2>Слова</h2>${amb ? '<p class="small muted">Для слов с несколькими прочтениями основное выбрано по соседним словам; другое прочтение можно открыть и выбрать вручную.</p>' : ''}<div class="ptoks">${cards.map(c => c.html).join('')}</div></section>`;
+      <ul class="res">${sim.map(r => `<li><span class="rt"><a class="pid" href="#p${r.p.slice(1)}">${r.p}</a> <span class="dn">${esc(r.x.dendi)}</span></span><span class="rx">${hlRu(esc(r.x.lit))}</span></li>`).join('')}</ul></section>` : ''}`;
 }
 
 // ---------- страница ----------
