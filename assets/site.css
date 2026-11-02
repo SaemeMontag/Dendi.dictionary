@@ -220,6 +220,11 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .ovl a:hover .dn { text-decoration: underline; }
 .ovl .vl { display: inline-block; min-width: 2.2em; color: var(--muted); font-weight: 600; }
 .ovl .dn { font-family: var(--f-dendi); }
+.mdt { overflow-x: auto; margin: 10px 0; -webkit-overflow-scrolling: touch; }
+.mdt table { border-collapse: collapse; font-size: .92rem; min-width: 100%; }
+.mdt th, .mdt td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+.mdt th { background: var(--bg); font-weight: 600; }
+.md ol.mdl { padding-left: 1.4em; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }

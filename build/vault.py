@@ -93,7 +93,19 @@ class Linker:
 def _blocks(lines, linker, skip_first_h1=True):
     """Markdown-строки → блоки [{'t': 'h1'|'h2'|'h3'|'p'|'li', 'x': текст}]."""
     out = []
+    tbl = None
     for i, l in enumerate(lines):
+        if l.startswith('|'):
+            cells = [c.strip() for c in re.split(r'(?<!\\)\|', l.strip().strip('|'))]
+            if all(re.fullmatch(r':?-{3,}:?', c) for c in cells if c):
+                continue  # строка-разделитель под шапкой
+            if tbl is None:
+                tbl = {'t': 'table', 'head': [linker.inline(c) for c in cells], 'rows': []}
+                out.append(tbl)
+            else:
+                tbl['rows'].append([linker.inline(c) for c in cells])
+            continue
+        tbl = None
         if l.startswith('!['):
             continue
         m = re.match(r'^(#{1,6})\s+(.*)$', l)
@@ -106,6 +118,10 @@ def _blocks(lines, linker, skip_first_h1=True):
         m = re.match(r'^[-*]\s+(.*)$', l)
         if m:
             out.append({'t': 'li', 'x': linker.inline(m[1])})
+            continue
+        m = re.match(r'^(\d+)\.\s+(.*)$', l)
+        if m:
+            out.append({'t': 'oli', 'n': int(m[1]), 'x': linker.inline(m[2])})
             continue
         out.append({'t': 'p', 'x': linker.inline(l)})
     return out
