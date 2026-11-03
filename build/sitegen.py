@@ -87,6 +87,13 @@ def head(title, desc, canonical, css_href, fonts_href, inline_css='', extra=''):
 '''
 
 
+TOTOP = ('<button type="button" class="totop" id="totop" aria-label="Наверх страницы" title="Наверх" hidden>↑</button>\n'
+         '<script>(function(){var b=document.getElementById("totop");'
+         'function u(){b.hidden=window.scrollY<500}window.addEventListener("scroll",u,{passive:true});u();'
+         'b.addEventListener("click",function(){var r=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;'
+         'window.scrollTo({top:0,behavior:r?"auto":"smooth"})})})();</script>\n')
+
+
 def header(prefix):
     return f'''<header class="top">
   <div class="wrap">
@@ -285,7 +292,7 @@ def build_site(data, page, site_dir, base):
                + f'<main class="wrap"><div class="page">{entry_html(e, ids, prev, nxt, pid_entries, data.get('plinks'))}</div></main>\n'
                + '<footer><div class="wrap">Свод не является нормативным словарём языка.'
                + (f' Данные документа на {e_(data.get("built"))}.' if data.get('built') else '')
-               + '</div></footer>\n</body>\n</html>\n')
+               + '</div></footer>\n' + TOTOP + '</body>\n</html>\n')
         name = f'{e["n"]}.html'; keep.add(name)
         open(os.path.join(site_dir, 'w', name), 'w', encoding='utf-8').write(doc)
     for f in os.listdir(os.path.join(site_dir, 'w')):

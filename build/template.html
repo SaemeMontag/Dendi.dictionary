@@ -236,6 +236,39 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
 .pgtag { background: var(--accent); color: var(--paper); }
 .pgt { font-weight: 600; }
 .pgex .md > p:first-child { margin-top: 0; }
+body.wide main.wrap { max-width: 1140px; }
+body.wide .page { max-width: none; }
+.gmain { min-width: 0; max-width: 800px; }
+.gtoc-btn, .gtoc-x { display: none; }
+.gtoc ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.gtoc li a { display: block; padding: 3px 8px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; line-height: 1.35; }
+.gtoc li a:hover { color: var(--ink); }
+.gtoc li a.on { color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+.gtoc li.l1 { margin-top: 10px; }
+.gtoc li.l1:first-child { margin-top: 0; }
+.gtoc li.l1 a { color: var(--ink); font-weight: 600; }
+.gtoc li.l1 a.on { color: var(--accent); }
+.gtoc li.l2 a { padding-left: 16px; font-size: .92rem; }
+.gtoc li.l3 a { padding-left: 28px; font-size: .86rem; }
+.gtoc-h { display: flex; justify-content: space-between; align-items: center; }
+.md h2[id], .md h3[id], .gnote { scroll-margin-top: calc(var(--barh, 110px) + 16px); }
+@media (min-width: 1000px) {
+  .glay { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 36px; align-items: start; }
+  .gside { position: sticky; top: calc(var(--barh, 110px) + 16px); max-height: calc(100vh - var(--barh, 110px) - 32px); overflow-y: auto; padding-right: 6px; overscroll-behavior: contain; }
+}
+@media (max-width: 999px) {
+  .gside { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 75vh; overflow-y: auto; background: var(--paper); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.25); padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateY(105%); transition: transform .2s ease; visibility: hidden; overscroll-behavior: contain; }
+  .gside.open { transform: none; visibility: visible; }
+  .gtoc-x { display: block; border: 0; background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; padding: 2px 6px; cursor: pointer; }
+  .gtoc-btn { display: block; position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 30; font: inherit; font-weight: 500; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.18); cursor: pointer; }
+  .gback { position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,.35); }
+  .gback[hidden] { display: none; }
+  .gtoc li a { padding-block: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .gside { transition: none; } }
+.totop { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); color: var(--accent); font-size: 1.3rem; line-height: 1; box-shadow: 0 4px 14px rgba(0,0,0,.18); cursor: pointer; }
+.totop:hover { border-color: var(--accent); }
+.totop[hidden] { display: none; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -307,6 +340,7 @@ a.pid { font-family: var(--f-mono); font-size: .88em; }
   </div>
 </div>
 <main class="wrap"><div id="view" class="page"></div></main>
+<button type="button" class="totop" id="totop" aria-label="Наверх страницы" title="Наверх" hidden>↑</button>
 <footer><div class="wrap" id="foot">Свод не является нормативным словарём языка.</div></footer>
 
 <script type="application/json" id="data">__DATA__</script>
@@ -389,8 +423,8 @@ function rich(s) {
   return out + plainRich(s.slice(last));
 }
 const PG_SEEN = new Set();   // ПГ, уже показанные на странице (якорь — у первого)
-function blocks(bs) {
-  let out = '', list = null;
+function blocks(bs, pre) {
+  let out = '', list = null, hk = 0;
   const close = () => { if (list) { out += `</${list}>`; list = null; } };
   bs.forEach(b => {
     if (b.t === 'li' || b.t === 'oli') {
@@ -401,6 +435,7 @@ function blocks(bs) {
     close();
     if (b.t === 'pg') { const g = (D.pg || {})[b.id]; const first = !PG_SEEN.has(b.id); PG_SEEN.add(b.id); if (g) out += `<aside class="pgex"${first ? ` id="pg${b.id.slice(2)}"` : ''}><div class="pgh"><span class="pidtag pgtag">${esc(b.id)}</span><span class="pgt">${rich(g.title)}</span></div><div class="md">${blocks(g.blocks)}</div></aside>`; return; }
     if (b.t === 'table') { out += `<div class="mdt"><table><thead><tr>${b.head.map(c => `<th>${rich(c)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; return; }
+    if (pre && (b.t === 'h2' || b.t === 'h3')) { out += `<${b.t} id="${pre}-h${++hk}">${rich(b.x)}</${b.t}>`; return; }
     out += b.t === 'p' ? `<p>${rich(b.x)}</p>` : `<${b.t}>${rich(b.x)}</${b.t}>`;
   });
   close();
@@ -553,15 +588,30 @@ function vDendi() {
   </div>`;
 }
 
+const stripMarks = t => String(t || '').replace(/⟦[a-z]:[^|⟧]*\|([^⟧]*)⟧/g, '$1').replace(/\*\*?(.+?)\*\*?/g, '$1');
+function gToc(notes) {
+  const items = [];
+  notes.forEach(g => {
+    items.push({ id: `gr-${g.id}`, t: g.title, l: 1 });
+    let k = 0;
+    g.blocks.forEach(b => { if (b.t === 'h2' || b.t === 'h3') items.push({ id: `gr-${g.id}-h${++k}`, t: stripMarks(b.x), l: b.t === 'h2' ? 2 : 3 }); });
+  });
+  return `<nav class="gtoc" aria-label="Содержание раздела «Грамматика»"><div class="gtoc-h"><span class="label">Содержание</span><button type="button" class="gtoc-x" aria-label="Закрыть содержание">×</button></div>
+    <ul>${items.map(it => `<li class="l${it.l}"><a href="#${it.id}" data-t="${it.id}">${esc(it.t)}</a></li>`).join('')}</ul></nav>`;
+}
 function vGrammar() {
   PG_SEEN.clear();
   const G = D.grammar, idx = G.find(g => g.index), rest = G.filter(g => !g.index);
-  return `<div class="stack" style="gap:22px">
+  return `<div class="glay">
+    <aside class="gside" id="gside">${gToc(rest)}</aside>
+    <div class="gmain stack" style="gap:22px">
     <h1>${esc(idx ? idx.title : 'Грамматика')}</h1>
     ${idx ? `<div class="md">${blocks(idx.blocks)}</div>` : ''}
-    ${rest.length > 1 ? `<nav class="box"><span class="label">Заметки</span><ul class="mdl">${rest.map(g => `<li><a href="#gr-${g.id}">${esc(g.title)}</a></li>`).join('')}</ul></nav>` : ''}
-    ${rest.map(g => `<section class="stack gnote" id="gr-${g.id}"><h2>${esc(g.title)}</h2><div class="md">${blocks(g.blocks)}</div></section>`).join('')}
+    ${rest.map(g => `<section class="stack gnote" id="gr-${g.id}"><h2>${esc(g.title)}</h2><div class="md">${blocks(g.blocks, 'gr-' + g.id)}</div></section>`).join('')}
     <p class="small muted">Номера П ведут к полным примерам с переводами и разбором; все они собраны на странице <a href="#examples">«Примеры»</a>.${Object.keys(D.pg || {}).length ? ' Номера ПГ — отдельная серия примеров, приведённых специально для грамматики; они показаны прямо в заметках и в раздел «Примеры» не входят.' : ''}</p>
+    </div>
+    <button type="button" class="gtoc-btn" id="gtocbtn" aria-controls="gside" aria-expanded="false">☰ Содержание</button>
+    <div class="gback" id="gback" hidden></div>
   </div>`;
 }
 
@@ -1043,19 +1093,65 @@ function route() {
   else if ((m = h.match(/^p(\d+)$/))) { html = vExamples(h); nav = 'examples'; scrollTo = h; title = `П${m[1]} · Словарь денди`; }
   else if ((m = h.match(/^ex-(.+)$/))) { const c = decodeURIComponent(m[1]); html = vExamples(null, c); nav = 'examples'; title = `Примеры: ${c} · Словарь денди`; }
   else if ((m = h.match(/^pg(\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = `ПГ${m[1]} · Словарь денди`; }
+  else if ((m = h.match(/^gr-(g\d+)-h\d+$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }
   else if (PAGES[h]) { html = PAGES[h][1](); nav = h; title = PAGES[h][0] + ' · Словарь денди'; }
   else { html = vHome(); nav = 'home'; }
   V.innerHTML = html;
+  document.body.classList.toggle('wide', nav === 'grammar');
   document.title = title;
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === nav));
   drawAbc(L);
+  setBarH();
   if (scrollTo) { const el = document.getElementById(scrollTo); if (el) { el.scrollIntoView({ block: 'start' }); return; } }
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
+// высота липкой панели поиска — для отступов содержания и якорей
+function setBarH() { const bar = document.querySelector('.bar'); if (bar) document.documentElement.style.setProperty('--barh', bar.offsetHeight + 'px'); }
+setBarH(); window.addEventListener('resize', setBarH);
+// кнопка «наверх»
+const toTop = document.getElementById('totop');
+const smooth = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
+toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: smooth() ? 'smooth' : 'auto' }));
+// содержание грамматики: переход без перерисовки, подсветка текущего раздела, выдвижная панель на телефоне
+const gOpen = on => {
+  const side = document.getElementById('gside'), back = document.getElementById('gback'), btn = document.getElementById('gtocbtn');
+  if (!side) return;
+  side.classList.toggle('open', on); if (back) back.hidden = !on; if (btn) btn.setAttribute('aria-expanded', on);
+  if (on) { const a = side.querySelector('a.on'); if (a) a.scrollIntoView({ block: 'center' }); }
+};
+document.addEventListener('click', ev => {
+  const t = ev.target.closest && ev.target;
+  if (!t) return;
+  if (t.closest('#gtocbtn')) { gOpen(!document.getElementById('gside').classList.contains('open')); return; }
+  if (t.closest('#gback') || t.closest('.gtoc-x')) { gOpen(false); return; }
+  const a = t.closest('.gtoc a[data-t]');
+  if (a) {
+    ev.preventDefault();
+    const el = document.getElementById(a.dataset.t);
+    if (el) { gOpen(false); el.scrollIntoView({ block: 'start', behavior: smooth() ? 'smooth' : 'auto' }); history.replaceState(null, '', '#' + a.dataset.t); }
+  }
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') gOpen(false); });
+let spyQ = false;
+function spy() {
+  spyQ = false;
+  toTop.hidden = window.scrollY < 500;
+  const side = document.getElementById('gside'); if (!side) return;
+  const links = [...side.querySelectorAll('a[data-t]')], lim = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--barh')) || 110) + 40;
+  let cur = null;
+  for (const a of links) { const el = document.getElementById(a.dataset.t); if (el && el.getBoundingClientRect().top <= lim) cur = a; else if (el) break; }
+  links.forEach(a => a.classList.toggle('on', a === cur));
+  if (cur && !side.classList.contains('open') && getComputedStyle(side).position === 'sticky') {
+    const r = cur.getBoundingClientRect(), sr = side.getBoundingClientRect();
+    if (r.top < sr.top + 30 || r.bottom > sr.bottom - 30) side.scrollTop += r.top - sr.top - sr.height / 2;
+  }
+}
+window.addEventListener('scroll', () => { if (!spyQ) { spyQ = true; requestAnimationFrame(spy); } }, { passive: true });
+window.addEventListener('hashchange', () => requestAnimationFrame(spy));
 document.addEventListener('click', ev => {
   const a = ev.target.closest && ev.target.closest('.ovl a[data-v]');
   if (!a) return;
@@ -1133,5 +1229,5 @@ document.getElementById('inex').addEventListener('change', ev => {
   if (location.hash === '#search') route();
 });
 document.getElementById('foot').textContent = `Свод не является нормативным словарём языка.${D.built ? ' Данные документа на ' + D.built + '.' : ''}`;
-route();
+route(); spy();
 </script>
