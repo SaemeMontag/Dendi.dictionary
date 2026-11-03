@@ -182,7 +182,7 @@ function vHome() {
   return `<div class="stack">
     <h1>Русско-дендийский словарь</h1>
     <p class="lead">Денди — сонгайский язык северного Бенина и приграничья с Нигером и Нигерией. Словарь объединяет базовую лексику списка Сводеша и слова, нужные для чтения дендийских текстов: варианты письма с источниками и полные примеры с двумя переводами и разбором по словам.</p>
-    <div class="statline"><span><b>${ST.all}</b> ${plural(ST.all, 'статья', 'статьи', 'статей')}</span><span><b>${ST.sw}</b> из списка Сводеша</span><span><b>${ST.extra}</b> ${plural(ST.extra, 'дополнительная', 'дополнительные', 'дополнительных')}</span><span><b>${ST.ex}</b> <a href="#examples">${plural(ST.ex, 'полный пример', 'полных примера', 'полных примеров')}</a></span><span><b>${ST.unest}</b> без установленного написания</span></div>
+    <div class="statline"><span><b>${ST.all}</b> ${plural(ST.all, 'статья', 'статьи', 'статей')}</span><span><b>${ST.ex}</b> <a href="#examples">${plural(ST.ex, 'полный пример', 'полных примера', 'полных примеров')}</a></span></div>
     <p class="small muted"><a href="#about">Как пользоваться словарём</a></p>
     <div class="letters">${ALPHA.filter(L => lettersPresent.has(L)).map(letterGroup).join('')}</div>
   </div>`;
@@ -278,6 +278,7 @@ function vExamples(focus, src) {
   return `<div class="stack" style="gap:22px">
     <h1>Полные примеры</h1>
     <p>${ST.ex} ${plural(ST.ex, 'уникальный пример', 'уникальных примера', 'уникальных примеров')}: полная фраза денди, опубликованный русский перевод (если он есть), авторский дословный перевод и разбор по словам. Один пример может приводиться в нескольких статьях; номер П остаётся тем же.</p>
+    <form class="pfind" id="pfind" role="search"><label for="pnum" class="label">Найти пример по номеру</label><div class="pfind-row"><span class="pfind-p">П</span><input id="pnum" inputmode="numeric" autocomplete="off" placeholder="например, 286" aria-label="Номер примера"><button type="submit" class="btn">Перейти</button></div><p class="small muted" id="pfmsg" aria-live="polite"></p></form>
     <div class="stack" style="gap:8px"><span class="label">Источник фразы</span>
       <nav class="fchips" aria-label="Фильтр по источнику">${chip(null, 'Все', PIDS.length)}${codes.map(c => chip(c, esc(c), cnt[c])).join('')}</nav>
       ${src ? `<p class="small muted">Показано ${list.length} ${plural(list.length, 'пример', 'примера', 'примеров')} из источника ${esc(src)}.${srcInfo}</p>` : ''}
@@ -307,8 +308,10 @@ function gToc(notes) {
     let k = 0;
     g.blocks.forEach(b => { if (b.t === 'h2' || b.t === 'h3') items.push({ id: `gr-${g.id}-h${++k}`, t: stripMarks(b.x), l: b.t === 'h2' ? 2 : 3 }); });
   });
+  const groups = [];
+  items.forEach(it => { if (it.l === 1) groups.push({ head: it, sub: [] }); else if (groups.length) groups[groups.length - 1].sub.push(it); });
   return `<nav class="gtoc" aria-label="Содержание раздела «Грамматика»"><div class="gtoc-h"><span class="label">Содержание</span><button type="button" class="gtoc-x" aria-label="Закрыть содержание">×</button></div>
-    <ul>${items.map(it => `<li class="l${it.l}"><a href="#${it.id}" data-t="${it.id}">${esc(it.t)}</a></li>`).join('')}</ul></nav>`;
+    <ul>${groups.map((g, i) => `<li class="l1"><div class="gt-row">${g.sub.length ? `<button type="button" class="gt-tg" aria-expanded="false" aria-controls="gts${i}" aria-label="Показать разделы: ${esc(g.head.t)}"></button>` : '<span class="gt-sp"></span>'}<a href="#${g.head.id}" data-t="${g.head.id}">${esc(g.head.t)}</a></div>${g.sub.length ? `<ul class="gt-sub" id="gts${i}" hidden>${g.sub.map(it => `<li class="l${it.l}"><a href="#${it.id}" data-t="${it.id}">${esc(it.t)}</a></li>`).join('')}</ul>` : ''}</li>`).join('')}</ul></nav>`;
 }
 function vGrammar() {
   PG_SEEN.clear();
@@ -820,6 +823,15 @@ function route() {
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
+document.addEventListener('submit', ev => {
+  if (ev.target.id !== 'pfind') return;
+  ev.preventDefault();
+  const raw = document.getElementById('pnum').value.trim(), msg = document.getElementById('pfmsg');
+  const d = (raw.match(/\d+/) || [''])[0];
+  if (!d) { msg.textContent = 'Введите номер примера, например 286.'; return; }
+  if (!PID['П' + d]) { msg.textContent = `Примера П${d} нет. Сейчас в словаре примеры от ${PIDS[0]} до ${PIDS[PIDS.length - 1]}.`; return; }
+  if (location.hash === '#p' + d) route(); else location.hash = 'p' + d;
+});
 // высота липкой панели поиска — для отступов содержания и якорей
 function setBarH() { const bar = document.querySelector('.bar'); if (bar) document.documentElement.style.setProperty('--barh', bar.offsetHeight + 'px'); }
 setBarH(); window.addEventListener('resize', setBarH);
@@ -839,6 +851,8 @@ document.addEventListener('click', ev => {
   if (!t) return;
   if (t.closest('#gtocbtn')) { gOpen(!document.getElementById('gside').classList.contains('open')); return; }
   if (t.closest('#gback') || t.closest('.gtoc-x')) { gOpen(false); return; }
+  const tg = t.closest('.gt-tg');
+  if (tg) { const sub = document.getElementById(tg.getAttribute('aria-controls')), open = tg.getAttribute('aria-expanded') !== 'true'; tg.setAttribute('aria-expanded', open); sub.hidden = !open; requestAnimationFrame(spy); return; }
   const a = t.closest('.gtoc a[data-t]');
   if (a) {
     ev.preventDefault();
@@ -855,6 +869,8 @@ function spy() {
   const links = [...side.querySelectorAll('a[data-t]')], lim = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--barh')) || 110) + 40;
   let cur = null;
   for (const a of links) { const el = document.getElementById(a.dataset.t); if (el && el.getBoundingClientRect().top <= lim) cur = a; else if (el) break; }
+  // если текущий пункт внутри свёрнутой заметки — подсвечивается сама заметка
+  if (cur && cur.closest('.gt-sub[hidden]')) cur = cur.closest('li.l1').querySelector('.gt-row a');
   links.forEach(a => a.classList.toggle('on', a === cur));
   if (cur && !side.classList.contains('open') && getComputedStyle(side).position === 'sticky') {
     const r = cur.getBoundingClientRect(), sr = side.getBoundingClientRect();
