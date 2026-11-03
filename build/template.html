@@ -388,6 +388,7 @@ function rich(s) {
   }
   return out + plainRich(s.slice(last));
 }
+const PG_SEEN = new Set();   // ПГ, уже показанные на странице (якорь — у первого)
 function blocks(bs) {
   let out = '', list = null;
   const close = () => { if (list) { out += `</${list}>`; list = null; } };
@@ -398,7 +399,7 @@ function blocks(bs) {
       out += `<li>${rich(b.x)}</li>`; return;
     }
     close();
-    if (b.t === 'pg') { const g = (D.pg || {})[b.id]; if (g) out += `<aside class="pgex" id="pg${b.id.slice(2)}"><div class="pgh"><span class="pidtag pgtag">${esc(b.id)}</span><span class="pgt">${rich(g.title)}</span></div><div class="md">${blocks(g.blocks)}</div></aside>`; return; }
+    if (b.t === 'pg') { const g = (D.pg || {})[b.id]; const first = !PG_SEEN.has(b.id); PG_SEEN.add(b.id); if (g) out += `<aside class="pgex"${first ? ` id="pg${b.id.slice(2)}"` : ''}><div class="pgh"><span class="pidtag pgtag">${esc(b.id)}</span><span class="pgt">${rich(g.title)}</span></div><div class="md">${blocks(g.blocks)}</div></aside>`; return; }
     if (b.t === 'table') { out += `<div class="mdt"><table><thead><tr>${b.head.map(c => `<th>${rich(c)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${rich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; return; }
     out += b.t === 'p' ? `<p>${rich(b.x)}</p>` : `<${b.t}>${rich(b.x)}</${b.t}>`;
   });
@@ -553,6 +554,7 @@ function vDendi() {
 }
 
 function vGrammar() {
+  PG_SEEN.clear();
   const G = D.grammar, idx = G.find(g => g.index), rest = G.filter(g => !g.index);
   return `<div class="stack" style="gap:22px">
     <h1>${esc(idx ? idx.title : 'Грамматика')}</h1>
