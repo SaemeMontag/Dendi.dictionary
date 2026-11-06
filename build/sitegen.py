@@ -94,10 +94,13 @@ TOTOP = ('<button type="button" class="totop" id="totop" aria-label="Навер�
          'window.scrollTo({top:0,behavior:r?"auto":"smooth"})})})();</script>\n')
 
 
+INTRO_HTML = 'Денди — южносонгайский язык, имеющий распространение в северной части Бенина (города Джугу, Параку, Канди, Каримама), а также в граничащих с Бенином областях Нигера и Нигерии. Словарь составлен любителем и не претендует на строгую научность. При наличии уточнений, претензий, рекомендаций и т. п. можно <a href="#contacts">обратиться к автору</a>. На сайте присутствуют словарные статьи, классифицированные по русскому алфавиту, содержащие слова на денди и отрывки из дендийских текстов, обозначенные как <a href="#examples">примеры употребления</a> тех или иных слов. Список текстов, из которых берутся примеры, указан в <a href="#sources">соответствующем разделе</a>. Тексты носят разный характер, из чего следует, что определенные выражения могут носить стилистические особенности, характерные конкретному тексту (в частности, библейские или учебные выражения). Описание грамматики языка составляется в <a href="#grammar">соответствующем разделе</a> по существующим научным описаниям, а также на основе анализа имеющегося корпуса. Также словарь содержит <a href="#parse">раздел для перевода фраз</a> с денди на русский и обратно, который пока находится на стадии разработки (подробнее — в <a href="#parse">самом разделе</a>).'
+
+
 def header(prefix):
     return f'''<header class="top">
   <div class="wrap">
-    <div class="brand"><a href="{prefix}"><span class="name">Денди</span></a><span class="sub">Русско-дендийский словарь · сонгай северного Бенина</span></div>
+    <div class="brand"><a href="{prefix}"><span class="name">Русско-дендийский словарь</span></a></div>
     <nav class="main">
       <a href="{prefix}#home">Словник</a>
       <a href="{prefix}#parse">Перевод фразы</a>
@@ -235,7 +238,7 @@ def entry_html(e, ids, prev, nxt, pid_entries, plinks=None):
 def static_index(entries):
     letters = [L for L in ALPHA if any(e['letter'] == L for e in entries)]
     letters += sorted({e['letter'] for e in entries} - set(ALPHA))  # заголовки на другую букву (COVID-19)
-    out = ['<div class="stack"><h1>Русско-дендийский словарь</h1>', f'<p class="lead">{e_(SITE_DESC)}</p><div class="letters">']
+    out = ['<div class="stack"><h1 class="vh-only">Русско-дендийский словарь</h1>', f'<p class="lead">{INTRO_HTML}</p><div class="letters">']
     for L in letters:
         items = ''.join(
             f'<li><a href="w/{e["n"]}.html">{e_(e["title"])}</a>'

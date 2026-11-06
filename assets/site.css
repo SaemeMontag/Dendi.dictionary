@@ -279,6 +279,7 @@ body.wide .page { max-width: none; }
 .pfind input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
 .pfind input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .pfind p:empty { display: none; }
+.vh-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }

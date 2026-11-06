@@ -284,6 +284,7 @@ body.wide .page { max-width: none; }
 .pfind input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
 .pfind input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .pfind p:empty { display: none; }
+.vh-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -326,7 +327,7 @@ body.wide .page { max-width: none; }
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><a href="#home"><span class="name">Денди</span></a><span class="sub">Русско-дендийский словарь · сонгай северного Бенина</span></div>
+    <div class="brand"><a href="#home"><span class="name">Русско-дендийский словарь</span></a></div>
     <nav class="main" id="nav">
       <a href="#home" data-r="home">Словник</a>
       <a href="#parse" data-r="parse">Перевод фразы</a>
@@ -484,8 +485,8 @@ function letterGroup(L) {
 const V = document.getElementById('view');
 function vHome() {
   return `<div class="stack">
-    <h1>Русско-дендийский словарь</h1>
-    <p class="lead">Денди — сонгайский язык северного Бенина и приграничья с Нигером и Нигерией. Словарь объединяет базовую лексику списка Сводеша и слова, нужные для чтения дендийских текстов: варианты письма с источниками и полные примеры с двумя переводами и разбором по словам.</p>
+    <h1 class="vh-only">Русско-дендийский словарь</h1>
+    <p class="lead">Денди — южносонгайский язык, имеющий распространение в северной части Бенина (города Джугу, Параку, Канди, Каримама), а также в граничащих с Бенином областях Нигера и Нигерии. Словарь составлен любителем и не претендует на строгую научность. При наличии уточнений, претензий, рекомендаций и т. п. можно <a href="#contacts">обратиться к автору</a>. На сайте присутствуют словарные статьи, классифицированные по русскому алфавиту, содержащие слова на денди и отрывки из дендийских текстов, обозначенные как <a href="#examples">примеры употребления</a> тех или иных слов. Список текстов, из которых берутся примеры, указан в <a href="#sources">соответствующем разделе</a>. Тексты носят разный характер, из чего следует, что определенные выражения могут носить стилистические особенности, характерные конкретному тексту (в частности, библейские или учебные выражения). Описание грамматики языка составляется в <a href="#grammar">соответствующем разделе</a> по существующим научным описаниям, а также на основе анализа имеющегося корпуса. Также словарь содержит <a href="#parse">раздел для перевода фраз</a> с денди на русский и обратно, который пока находится на стадии разработки (подробнее — в <a href="#parse">самом разделе</a>).</p>
     <div class="statline"><span><b>${ST.all}</b> ${plural(ST.all, 'статья', 'статьи', 'статей')}</span><span><b>${ST.ex}</b> <a href="#examples">${plural(ST.ex, 'полный пример', 'полных примера', 'полных примеров')}</a></span></div>
     <p class="small muted"><a href="#about">Как пользоваться словарём</a></p>
     <div class="letters">${ALPHA.filter(L => lettersPresent.has(L)).map(letterGroup).join('')}</div>
