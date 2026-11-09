@@ -302,8 +302,12 @@ body.wide .page { max-width: none; }
 .adchip { font: inherit; font-size: .82rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
 .adparse .adf { flex: 1 1 140px; }
 .adparse .ad-delrow { align-self: flex-end; padding: 6px 10px; }
-.navadmin { margin-left: auto; }
 .advar .btn2 { padding: 2px 10px; font-size: .85rem; font-weight: 400; }
+.addraft { flex-direction: column; align-items: stretch; gap: 10px; }
+.addraft .adrow { align-items: center; }
+.adlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.adlist > li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; }
+.adlist .rt { margin-right: 4px; }
 .adprev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
 .linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
@@ -1125,7 +1129,7 @@ if (document.addEventListener) {
 // Доступ проверяет GitHub: личный ключ владельца хранилища с правом admin на репозиторий.
 // Черновики пишутся в «Черновики» (сборка их не читает); новые примеры — в «Примеры»; правка и перенос — в «Статьи».
 const GH_REPO = 'SaemeMontag/Dendi-dictionary', GH_API = 'https://api.github.com/repos/' + GH_REPO;
-const AD = { token: '', ok: false, checked: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '', nextP: 0, vaultP: new Set(), exCache: {}, exLoading: new Set() };
+const AD = { token: '', ok: false, checked: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '', nextP: 0, vaultP: new Set(), draftP: new Set(), exCache: {}, exLoading: new Set(), open: {} };
 const ssGet = k => { try { return sessionStorage.getItem(k) || localStorage.getItem(k) || ''; } catch (_) { return ''; } };
 const ssSet = (k, v, keep) => { try { sessionStorage.setItem(k, v); if (keep) localStorage.setItem(k, v); } catch (_) {} };
 const ssDel = k => { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch (_) {} };
@@ -1240,11 +1244,12 @@ const adField = (id, label, val, attrs = '') => `<label class="adf"><span class=
 const adArea = (id, label, val, rows = 3, hint = '') => `<label class="adf"><span class="label">${label}</span><textarea id="${id}" rows="${rows}">${esc(val)}</textarea>${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
 const pidHint = v => {
   const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».';
-  const site = ps.filter(p => PID[p]), vault = ps.filter(p => !PID[p] && AD.vaultP.has(p)), bad = ps.filter(p => !pidKnown(p)), ok = site.length + vault.length;
-  return `${ok} ${plural(ok, 'пример', 'примера', 'примеров')}${vault.length ? ` · ещё не на сайте, но есть в хранилище: ${vault.join(', ')} (появятся после обновления)` : ''}${bad.length ? ` · нет ни на сайте, ни в хранилище, не войдут в статью: ${bad.join(', ')}` : ''}`;
+  const vault = ps.filter(p => !PID[p] && AD.vaultP.has(p)), draft = ps.filter(p => !PID[p] && !AD.vaultP.has(p) && AD.draftP.has(p)), bad = ps.filter(p => !pidKnown(p)), ok = ps.length - bad.length;
+  return `${ok} ${plural(ok, 'пример', 'примера', 'примеров')}${vault.length ? ` · в словаре, но ещё не на сайте: ${vault.join(', ')}` : ''}${draft.length ? ` · в черновиках: ${draft.join(', ')} (перейдут в словарь вместе со статьёй)` : ''}${bad.length ? ` · не найдены, не войдут в статью: ${bad.join(', ')}` : ''}`;
 };
-// примеры, которые уже лежат в хранилище, но ещё не попали на сайт
-const pidKnown = p => !!PID[p] || AD.vaultP.has(p);
+// примеры: на сайте → в словаре хранилища («Примеры») → в черновиках («Черновики/Примеры»)
+const pidKnown = p => !!PID[p] || AD.vaultP.has(p) || AD.draftP.has(p);
+const exPath = p => (!AD.vaultP.has(p) && AD.draftP.has(p) ? 'Черновики/Примеры/' : 'Примеры/') + p + '.md';
 function parseExMd(pid, text) {
   const x = { pid, dendi: '', source: '', source_url: '', pub: '', lit: '', parse: '', note: '' };
   const strip = t => t.replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, '$1').replace(/\[\[([^\]]+)\]\]/g, (m, a) => a.split('/').pop());
@@ -1261,15 +1266,49 @@ function parseExMd(pid, text) {
 const exFor = p => PID[p] ? PID[p].ex : AD.exCache[p] || (adFetchEx(p), { pid: p, dendi: 'Загружаю пример из хранилища…', source: '', lit: '', parse: '' });
 async function adFetchEx(p) {
   if (AD.exLoading.has(p)) return; AD.exLoading.add(p);
-  const f = await adGet(`Примеры/${p}.md`);
+  const f = await adGet(exPath(p));
   AD.exCache[p] = f ? parseExMd(p, f.text) : { pid: p, dendi: 'Не удалось загрузить пример из хранилища.', source: '', lit: '', parse: '' };
   const prev = document.getElementById('ad-prev'); if (prev && AD.tab === 'entry') prev.innerHTML = entryPreview(ENT);
+  if (AD.tab === 'drafts') adRender();
+}
+function parseArtMd(text) {
+  const ls = text.split('\n').map(l => l.replace(/\s*\^[\w-]+\s*$/, '').trim()).filter(Boolean);
+  const h = (ls[0] || '').match(/^#\s+(\d+)\.\s+(.+)$/);
+  const e = { n: h ? +h[1] : 0, title: h ? h[2] : (ls[0] || '').replace(/^#\s*/, ''), kind: 'extra', swadesh: '', meaning: '', notes: [], overview: [], variants: [], linked: [], extra_refs: [], letter: '' };
+  let v = null, mode = 'pre';
+  const nv = (label, form) => (v = { label, form, notes: [], full: null, status: '', examples: [], refs: [] }, e.variants.push(v), v);
+  const stripW = t => t.replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, '$1').replace(/\[\[([^\]]+)\]\]/g, (m, a) => a.split('/').pop());
+  for (const l of ls.slice(1)) {
+    let m;
+    if (/^#{1,6}\s*Варианты и значения/.test(l)) { mode = 'ov'; continue; }
+    if (mode === 'ov') {
+      if (l.startsWith('- ')) { const it = l.slice(2), w = it.match(/^\[\[[^\]|]*\|([^\]]+)\]\](.*)$/), tx = w ? w[1] : it.split(/\s+—\s+/)[0], rest = w ? w[2] : it.slice(tx.length), lm = tx.match(/^([IVXLC]+)\.\s+(.+)$/);
+        e.overview.push({ label: lm ? lm[1] : '', form: lm ? lm[2] : tx, note: wikiMark(rest.replace(/^\s*—\s*/, '')), anchor: false }); continue; }
+      mode = 'pre';
+    }
+    if ((m = l.match(/^Сводеш № (\d+)/))) { e.kind = 'swadesh'; e.swadesh = m[1]; continue; }
+    if (l === 'Дополнительная лексика и грамматика.') continue;
+    if (l.startsWith('Значение и употребление: ')) { e.meaning = wikiMark(l.slice(25)); continue; }
+    if ((m = l.match(/^#{2,4}\s+([IVXLC]+)\.\s+(.+)$/))) { nv(m[1], m[2]); mode = 'var'; continue; }
+    if (/^Источники (формы|новой партии|контекстов)/.test(l) || l === 'Дополнительные источниковые привязки:') { mode = 'refs'; continue; }
+    if ((m = l.match(/^!\[\[Примеры\/(П\d+)\]\]$/))) { if (!v) nv('', ''); v.examples.push({ ...exFor(m[1]), k: v.examples.length + 1 }); mode = 'var'; continue; }
+    if (/^#{1,6}\s*Пример(\s|$)/.test(l) || l === 'Примеры:' || /^Полных примеров/.test(l)) continue;
+    if (/^Полный пример с дословным разбором отсутствует/.test(l)) { if (!v) nv('', ''); v.status = l; continue; }
+    if (mode === 'refs') {
+      if ((m = l.match(/^\[([^\]]+)\]\((https?:[^)\s]+)\)$/))) { (v || nv('', '')).refs.push({ t: m[1], u: m[2] }); continue; }
+      if (/^\[\[Источники\//.test(l) || CODE_RE.test(l.split(/[ ,]/)[0])) { CODE_RE.lastIndex = 0; (v || nv('', '')).refs.push({ t: stripW(l), u: '' }); continue; }
+      CODE_RE.lastIndex = 0; mode = v ? 'var' : 'pre';
+    }
+    if (!v && !/[А-Яа-яЁё]/.test(l) && l.length < 60 && !l.startsWith('#')) { nv('', l); mode = 'var'; continue; }
+    (v ? v.notes : e.notes).push(wikiMark(l.replace(/^#{1,6}\s+/, '')));
+  }
+  return e;
 }
 async function adLoadVaultP() {
   const r = await gh('/contents/' + encPath('Примеры') + '?ref=' + encodeURIComponent(AD.branch));
   if (!r.ok || !Array.isArray(r.j)) return;
   AD.vaultP = new Set(r.j.map(f => (f.name.match(/^(П\d+)\.md$/) || [])[1]).filter(Boolean));
-  AD.nextP = Math.max(0, ...[...AD.vaultP].map(p => +p.slice(1)), ...PIDS.map(p => +p.slice(1))) + 1;
+  AD.nextP = Math.max(0, ...[...AD.vaultP, ...AD.draftP].map(p => +p.slice(1)), ...PIDS.map(p => +p.slice(1))) + 1;
   if (location.hash === '#admin' && AD.tab === 'entry') adRender();
 }
 function adEntryForm() {
@@ -1351,8 +1390,8 @@ function adExForm() {
       <div class="adprev" id="ad-x-prev">${exPreview(x)}</div>
       <details><summary class="small">Текст заметки для Obsidian</summary><textarea id="ad-x-md" rows="12" readonly class="admd">${esc(exMarkdown(x))}</textarea><button type="button" class="btn2 ad-copy" data-src="ad-x-md">Скопировать</button></details>
       <p class="small muted" id="ad-x-miss">${exMissing(x).length ? 'Не заполнено: ' + exMissing(x).join(', ') + '.' : ''}</p>
-      <button type="button" class="btn" id="ad-save-ex">Сохранить в «Примеры»</button>
-      <span class="small muted">Пример появится на сайте, когда его номер будет указан в статье (в конструкторе — в поле «Полные примеры») и сайт обновится.</span>
+      <button type="button" class="btn" id="ad-save-ex">Сохранить в черновики</button>
+      <span class="small muted">Пример сохраняется в «Черновики/Примеры». В словарь он перейдёт вместе со статьёй, где указан его номер, или отдельно — кнопкой «Перенести в словарь» во вкладке «Черновики».</span>
     </div>
   </div>`;
 }
@@ -1368,11 +1407,19 @@ function adNoteForm() {
 }
 function adDrafts() {
   if (!AD.drafts) return '<p class="small muted">Загружаю список…</p>';
-  if (!AD.drafts.length) return '<p class="small muted">В папке «Черновики» пока пусто.</p>';
-  return `<ul class="res">${AD.drafts.map(f => {
-    const isArt = /^Черновики\/[^/]+\.md$/.test(f.path);
-    return `<li><span class="rt">${esc(f.path.replace(/^Черновики\//, ''))}</span><span class="rx adrow"><button type="button" class="btn2 ad-open" data-p="${esc(f.path)}">Редактировать как текст</button>${isArt ? `<button type="button" class="btn2 ad-publish" data-p="${esc(f.path)}">Перенести в словарь</button>` : ''}<a href="${esc(f.html_url)}" target="_blank" rel="noopener">на GitHub</a></span></li>`;
-  }).join('')}</ul><p class="small muted">«Перенести в словарь» перемещает черновик статьи в папку «Статьи». На сайте статья появится после следующего обновления.</p>`;
+  const kind = f => /^Черновики\/Примеры\/П\d+\.md$/.test(f.path) ? 'ex' : /^Черновики\/Заметки\//.test(f.path) ? 'note' : /^Черновики\/[^/]+\.md$/.test(f.path) ? 'art' : 'other';
+  const item = f => {
+    const k = kind(f), op = AD.open[f.path], name = f.path.replace(/^Черновики\/(Примеры\/|Заметки\/)?/, '').replace(/\.md$/, '');
+    let body = '';
+    if (op) body = op.text == null ? '<p class="small muted">Загружаю…</p>' : `<div class="adprev">${k === 'art' ? entryHtml(parseArtMd(op.text), true) : k === 'ex' ? exCard(parseExMd(name, op.text), null) : `<div class="md">${blocks(op.text.split('\n').filter(l => l.trim()).map(l => ({ t: /^#{1,6}\s/.test(l) ? 'h3' : 'p', x: wikiMark(l.replace(/^#{1,6}\s+/, '')) })))}</div>`}</div>`;
+    return `<li class="addraft"><div class="adrow"><b class="rt">${esc(name)}</b><button type="button" class="btn2 ad-show" data-p="${esc(f.path)}" aria-expanded="${!!op}">${op ? 'Скрыть' : 'Показать'}</button><button type="button" class="btn2 ad-open" data-p="${esc(f.path)}">Редактировать как текст</button>${k === 'art' || k === 'ex' ? `<button type="button" class="btn2 ad-publish" data-p="${esc(f.path)}">Перенести в словарь</button>` : ''}<a class="small" href="${esc(f.html_url)}" target="_blank" rel="noopener">на GitHub</a></div>${body}</li>`;
+  };
+  const sec = (title, list, empty) => `<section class="stack" style="gap:8px"><h2>${title} <span class="muted small">${list.length}</span></h2>${list.length ? `<ul class="adlist">${list.map(item).join('')}</ul>` : `<p class="small muted">${empty}</p>`}</section>`;
+  const D2 = AD.drafts, arts = D2.filter(f => kind(f) === 'art'), exs = D2.filter(f => kind(f) === 'ex'), notes = D2.filter(f => kind(f) === 'note' || kind(f) === 'other');
+  return `<div class="stack" style="gap:20px">
+    <p class="small muted">Здесь хранится всё, что ещё не вошло в словарь: статьи — в «Черновики», примеры — в «Черновики/Примеры», заметки — в «Черновики/Заметки». «Показать» открывает черновик так, как он будет выглядеть в словаре. «Перенести в словарь» перемещает статью в «Статьи» (вместе с её примерами из черновиков), пример — в «Примеры»; на сайте они появятся после обновления.</p>
+    ${sec('Статьи', arts, 'Черновиков статей нет.')}${sec('Примеры', exs, 'Черновиков примеров нет.')}${sec('Заметки', notes, 'Заметок нет.')}
+  </div>`;
 }
 function vAdmin() {
   if (!AD.ok) return `<div class="stack" style="gap:16px;max-width:640px">
@@ -1382,12 +1429,6 @@ function vAdmin() {
       <label class="chk"><input type="checkbox" id="ad-rem"> <span>Запомнить на этом устройстве</span></label>
       <div class="adrow"><button type="submit" class="btn">Войти</button></div>
       <p class="small" id="ad-err" aria-live="polite">${esc(AD.msg)}</p></form>
-    <details class="box"><summary><b>Как получить ключ</b></summary><ol class="mdl" style="margin-top:8px">
-      <li>Откройте <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> (или GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token).</li>
-      <li>Repository access: <b>Only select repositories</b> → <b>Dendi-dictionary</b>.</li>
-      <li>Permissions → Repository permissions → <b>Contents: Read and write</b> (Metadata: Read-only добавится сам).</li>
-      <li>Нажмите Generate token, скопируйте ключ и вставьте его сюда. Никому его не пересылайте.</li></ol>
-      <p class="small muted">Ключ хранится только в этом браузере и отправляется только на api.github.com.</p></details>
   </div>`;
   const tab = (k, l) => `<button type="button" class="pdir${AD.tab === k ? ' on' : ''}" data-adtab="${k}" aria-pressed="${AD.tab === k}">${l}</button>`;
   return `<div class="stack" style="gap:16px">
@@ -1461,7 +1502,7 @@ async function adCheck() {
       AD.ok = true; AD.branch = r.j.default_branch || 'main'; AD.msg = '';
       const u = await fetch('https://api.github.com/user', { headers: { Authorization: 'Bearer ' + AD.token } }).then(x => x.ok ? x.json() : null).catch(() => null);
       AD.user = u && u.login || '';
-      adLoadVaultP();
+      adLoadVaultP(); adLoadDrafts();
     }
   } catch (err) { AD.ok = false; AD.msg = 'Не удалось связаться с GitHub. Проверьте интернет и попробуйте ещё раз.'; }
   adNav(); adRender();
@@ -1499,15 +1540,14 @@ async function adSaveEntry() {
 }
 async function adSaveEx() {
   const miss = exMissing(EX); if (miss.length) return adMsg('Заполните: ' + miss.join(', ') + '.');
-  const n = exNum(), path = `Примеры/П${n}.md`;
+  const n = exNum(), path = `Черновики/Примеры/П${n}.md`;
   if (pidKnown('П' + n)) return adMsg(`Номер П${n} уже занят. Укажите другой номер.`);
   try {
     adMsg('Сохраняю…');
-    if (await adSha(path)) return adMsg(`В хранилище уже есть П${n}. Укажите другой номер.`);
-    await adPut(path, exMarkdown(EX), '', 'Новый пример');
-    adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
-    AD.vaultP.add('П' + n); delete AD.exCache['П' + n];
-    EX = blankEx(); AD.nextP = (+n) + 1; saveLocal(); adRender(); adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
+    if (await adSha(path) || await adSha(`Примеры/П${n}.md`)) return adMsg(`В хранилище уже есть П${n}. Укажите другой номер.`);
+    await adPut(path, exMarkdown(EX), '', 'Черновик примера');
+    AD.draftP.add('П' + n); delete AD.exCache['П' + n]; AD.drafts = null;
+    EX = blankEx(); AD.nextP = (+n) + 1; saveLocal(); adRender(); adMsg(`Сохранено в черновики: П${n}. Укажите его в статье — он перейдёт в словарь вместе с ней — или перенесите отдельно во вкладке «Черновики».`);
   } catch (err) { adMsg(err.message); }
 }
 async function adSaveNote() {
@@ -1524,8 +1564,10 @@ async function adSaveNote() {
 async function adLoadDrafts() {
   const list = [];
   const walk = async p => { const r = await gh('/contents/' + encPath(p) + '?ref=' + encodeURIComponent(AD.branch)); if (!r.ok || !Array.isArray(r.j)) return; for (const f of r.j) { if (f.type === 'dir') await walk(f.path); else if (/\.md$/i.test(f.name)) list.push(f); } };
-  try { await walk('Черновики'); AD.drafts = list.sort((a, b) => a.path.localeCompare(b.path, 'ru')); } catch (_) { AD.drafts = []; adMsg('Не удалось получить список черновиков.'); }
-  if (AD.tab === 'drafts') adRender();
+  try { await walk('Черновики'); AD.drafts = list.sort((a, b) => a.path.localeCompare(b.path, 'ru', { numeric: true })); } catch (_) { AD.drafts = []; adMsg('Не удалось получить список черновиков.'); }
+  AD.draftP = new Set(AD.drafts.map(f => (f.path.match(/^Черновики\/Примеры\/(П\d+)\.md$/) || [])[1]).filter(Boolean));
+  if (AD.nextP) AD.nextP = Math.max(AD.nextP, ...[...AD.draftP].map(p => +p.slice(1) + 1));
+  if (AD.tab === 'drafts' || AD.tab === 'entry') adRender();
 }
 async function adOpen(path) {
   const f = await adGet(path);
@@ -1533,9 +1575,22 @@ async function adOpen(path) {
   AD.note = { title: path.replace(/^.*\//, '').replace(/\.md$/i, ''), body: f.text, path, sha: f.sha };
   AD.tab = 'note'; AD.msg = ''; adRender();
 }
+async function adMoveEx(p) {
+  const src = `Черновики/Примеры/${p}.md`, dst = `Примеры/${p}.md`;
+  if (await adSha(dst)) throw new Error(`В «Примерах» уже есть ${p}. Измените номер черновика.`);
+  const f = await adGet(src); if (!f) throw new Error(`Не удалось открыть черновик ${p}.`);
+  await adPut(dst, f.text, '', 'Новый пример из черновика'); await adDel(src, f.sha, 'Черновик примера перенесён в словарь');
+  AD.draftP.delete(p); AD.vaultP.add(p);
+}
 async function adPublish(path) {
   try {
     adMsg('Проверяю черновик…');
+    const exm = path.match(/^Черновики\/Примеры\/(П\d+)\.md$/);
+    if (exm) {
+      if (!confirm(`Перенести пример ${exm[1]} из черновиков в словарь?`)) return adMsg('');
+      adMsg('Переношу…'); await adMoveEx(exm[1]);
+      AD.drafts = null; delete AD.open[path]; adRender(); return adMsg(`Готово: Примеры/${exm[1]}.md. На сайте он появится, когда его номер будет в статье и сайт обновится.`);
+    }
     const f = await adGet(path); if (!f) return adMsg('Не удалось открыть черновик.');
     const m = f.text.match(/^#\s+(\d+)\.\s+(.+?)\s*(\^[\w-]+)?\s*$/m);
     if (!m || f.text.trimStart().indexOf(m[0].trim()) !== 0) return adMsg('Первая строка черновика должна быть вида «# номер. Заголовок».');
@@ -1543,11 +1598,15 @@ async function adPublish(path) {
     const target = 'Статьи/' + path.replace(/^Черновики\//, '');
     if (await adSha(target)) return adMsg(`В «Статьях» уже есть файл ${target.slice(7)}. Переименуйте черновик или поправьте статью вручную.`);
     if (clash && clash.title !== title) return adMsg(`Номер ${n} уже занят статьёй «${clash.title}». Исправьте номер в черновике (например, на ${nextN()}) и повторите.`);
-    if (!confirm(`Перенести «${title}» (№ ${n}) из черновиков в словарь?`)) return adMsg('');
+    const emb = [...new Set([...f.text.matchAll(/!\[\[Примеры\/(П\d+)\]\]/g)].map(x => x[1]))];
+    const missing = emb.filter(p => !pidKnown(p)), fromDraft = emb.filter(p => !PID[p] && !AD.vaultP.has(p) && AD.draftP.has(p));
+    if (missing.length) return adMsg(`В статье есть примеры, которых нет ни в словаре, ни в черновиках: ${missing.join(', ')}. Исправьте статью, иначе сборка сайта остановится.`);
+    if (!confirm(`Перенести «${title}» (№ ${n}) в словарь?${fromDraft.length ? `\nВместе с ней из черновиков перейдут примеры: ${fromDraft.join(', ')}.` : ''}`)) return adMsg('');
     adMsg('Переношу…');
+    for (const p of fromDraft) await adMoveEx(p);
     await adPut(target, f.text, '', 'Новая статья из черновика');
     await adDel(path, f.sha, 'Черновик перенесён в словарь');
-    AD.drafts = null; adRender(); adMsg(`Готово: ${target}. Статья появится на сайте после обновления.`);
+    AD.drafts = null; delete AD.open[path]; adRender(); adMsg(`Готово: ${target}${fromDraft.length ? ` и примеры ${fromDraft.join(', ')}` : ''}. На сайте появятся после обновления.`);
   } catch (err) { adMsg(err.message); }
 }
 document.addEventListener('submit', ev => {
@@ -1611,7 +1670,8 @@ document.addEventListener('click', ev => {
       const d = (document.getElementById('ad-ed-pid').value.match(/\d+/) || [''])[0], ta = document.getElementById('ad-ed-text');
       if (!d) return adMsg('Введите номер примера.');
       if (!pidKnown('П' + d)) adMsg(`Внимание: П${d} нет ни на сайте, ни в хранилище — проверьте номер.`);
-      else if (!PID['П' + d]) adMsg(`П${d} есть в хранилище и появится на сайте после обновления.`);
+      else if (!PID['П' + d] && !AD.vaultP.has('П' + d)) adMsg(`П${d} пока в черновиках — перенесите его в словарь (вкладка «Черновики»), иначе сборка сайта остановится.`);
+      else if (!PID['П' + d]) adMsg(`П${d} есть в словаре и появится на сайте после обновления.`);
       const ins = `\n### Пример П${d}\n\n![[Примеры/П${d}]]\n`, a = ta.selectionStart ?? ta.value.length;
       ta.value = ta.value.slice(0, a) + ins + ta.value.slice(a); ta.focus(); ta.setSelectionRange(a + ins.length, a + ins.length); return;
     }
@@ -1638,6 +1698,14 @@ document.addEventListener('click', ev => {
   if (t.closest('#ad-save-note')) { adSync(); adSaveNote(); return; }
   if (t.closest('#ad-new-note')) { AD.note = { title: '', body: '', path: '', sha: '' }; AD.msg = ''; adRender(); return; }
   const op = t.closest('.ad-open'); if (op) { adOpen(op.dataset.p); return; }
+  const sh = t.closest('.ad-show');
+  if (sh) {
+    const pth = sh.dataset.p;
+    if (AD.open[pth]) { delete AD.open[pth]; adRender(); return; }
+    AD.open[pth] = { text: null }; adRender();
+    adGet(pth).then(f => { if (AD.open[pth]) { AD.open[pth].text = f ? f.text : 'Не удалось загрузить файл.'; adRender(); } });
+    return;
+  }
   const pb = t.closest('.ad-publish'); if (pb) { adPublish(pb.dataset.p); return; }
 });
 

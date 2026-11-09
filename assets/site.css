@@ -297,8 +297,12 @@ body.wide .page { max-width: none; }
 .adchip { font: inherit; font-size: .82rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
 .adparse .adf { flex: 1 1 140px; }
 .adparse .ad-delrow { align-self: flex-end; padding: 6px 10px; }
-.navadmin { margin-left: auto; }
 .advar .btn2 { padding: 2px 10px; font-size: .85rem; font-weight: 400; }
+.addraft { flex-direction: column; align-items: stretch; gap: 10px; }
+.addraft .adrow { align-items: center; }
+.adlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.adlist > li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; }
+.adlist .rt { margin-right: 4px; }
 .adprev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
 .linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
