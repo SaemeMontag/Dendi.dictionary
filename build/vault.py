@@ -322,7 +322,7 @@ def build_data(vault):
                         seen_refs.add((id(target), key)); target.append(r)
                     continue
                 mode = 'var' if var is not None else 'pre'
-            fm = re.fullmatch(r'Полных примеров для этого варианта: (\d+)\.', plain)
+            fm = re.fullmatch(r'Полных примеров(?: для этого варианта)?:\s*(\d+)\.?', plain)
             if fm:
                 if var is None: var = new_var('', '')
                 var['full'] = int(fm[1]); continue
