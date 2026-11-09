@@ -110,6 +110,7 @@ def header(prefix):
       <a href="{prefix}#sources">Источники</a>
       <a href="{prefix}#about">Как пользоваться</a>
       <a href="{prefix}#contacts">Контакты</a>
+      <a href="{prefix}#admin" class="navadmin">Вход</a>
     </nav>
   </div>
   <div class="weave" aria-hidden="true"></div>

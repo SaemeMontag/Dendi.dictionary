@@ -235,7 +235,7 @@ def build_data(vault):
     # --- статьи ---
     entries = []
     for name, (n, title, ls) in sorted(art_lines.items(), key=lambda kv: kv[1][0]):
-        e = {'n': n, 'title': title, 'kind': 'extra', 'variants': [], 'extra_refs': [], 'linked': [], 'notes': [], 'overview': []}
+        e = {'n': n, 'title': title, 'file': name, 'kind': 'extra', 'variants': [], 'extra_refs': [], 'linked': [], 'notes': [], 'overview': []}
         var = None
         mode = 'pre'
         pending = []
@@ -375,7 +375,7 @@ def build_data(vault):
             if m and not url and (m[1].startswith('Источник') or m[1].startswith('RST')):
                 url = m[2]; continue
             body.append(l)
-        rec = {'id': L.sources[s], 'code': aliases.get(s, _source_code(s)), 'title': title, 'url': url, 'blocks': _blocks(body, L, False)}
+        rec = {'id': L.sources[s], 'code': aliases.get(s, _source_code(s)), 'file': s, 'title': title, 'url': url, 'blocks': _blocks(body, L, False)}
         if s == rst_name:
             rec['code'] = 'RST'; rst = rec
         else:

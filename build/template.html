@@ -295,6 +295,14 @@ body.wide .page { max-width: none; }
 .adrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .advar { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; margin: 0; min-width: 0; }
 .advar legend { font-weight: 600; padding: 0 6px; display: flex; gap: 10px; align-items: center; }
+.adedit { align-self: flex-start; margin-top: 8px; text-decoration: none; display: inline-block; }
+.adedit[hidden] { display: none; }
+.adsrc:empty, .adurl:empty { display: none; }
+.adsrc, .adurl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: -4px; }
+.adchip { font: inherit; font-size: .82rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.adparse .adf { flex: 1 1 140px; }
+.adparse .ad-delrow { align-self: flex-end; padding: 6px 10px; }
+.navadmin { margin-left: auto; }
 .advar .btn2 { padding: 2px 10px; font-size: .85rem; font-weight: 400; }
 .adprev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
 .linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
@@ -350,6 +358,7 @@ body.wide .page { max-width: none; }
       <a href="#sources" data-r="sources">Источники</a>
       <a href="#about" data-r="about">Как пользоваться</a>
       <a href="#contacts" data-r="contacts">Контакты</a>
+      <a href="#admin" data-r="admin" id="navadmin" class="navadmin">Вход</a>
     </nav>
   </div>
   <div class="weave" aria-hidden="true"></div>
@@ -569,7 +578,7 @@ function entryHtml(e, preview) {
   const relHtml = rel.size ? `<section class="stack"><span class="label">То же написание в других статьях</span><div class="related">${[...rel.values()].map(x => `<span><span class="dn">${esc(x.form)}</span> → ${wordLink(x.e)}</span>`).join('')}</div></section>` : '';
   return `<article class="stack" style="gap:22px">
     ${preview ? '' : `<div class="crumbs"><a href="#home">Словник</a><span>›</span><a href="#l${ALPHA.indexOf(e.letter)}">${e.letter}</a></div>`}
-    <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div></div>
+    <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div>${preview ? '' : `<a class="btn2 adedit" href="#edit-${e.n}"${AD.ok ? '' : ' hidden'}>Редактировать статью</a>`}</div>
     ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
     ${ov}
     ${e.meaning ? `<div class="box"><span class="label">Значение и употребление</span>${rich(e.meaning)}</div>` : ''}
@@ -1112,22 +1121,26 @@ if (document.addEventListener) {
 }
 
 // маршрутизация
-// ---------- редактор: заметки и конструктор словарной статьи (только для админа хранилища) ----------
-// Доступ проверяет GitHub: личный токен владельца хранилища, право admin на репозиторий.
-// Файлы пишутся в папку «Черновики» хранилища; на сайт она не выводится (сборка её не читает).
+// ---------- редактор: заметки, конструктор статьи и примера, правка статей (только для админа хранилища) ----------
+// Доступ проверяет GitHub: личный ключ владельца хранилища с правом admin на репозиторий.
+// Черновики пишутся в «Черновики» (сборка их не читает); новые примеры — в «Примеры»; правка и перенос — в «Статьи».
 const GH_REPO = 'SaemeMontag/Dendi-dictionary', GH_API = 'https://api.github.com/repos/' + GH_REPO;
-const AD = { token: '', ok: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '' };
-const ssGet = (k, store) => { try { return (store || sessionStorage).getItem(k) || ''; } catch (_) { return ''; } };
-const ssSet = (k, v, store) => { try { (store || sessionStorage).setItem(k, v); } catch (_) {} };
+const AD = { token: '', ok: false, checked: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '', nextP: 0 };
+const ssGet = k => { try { return sessionStorage.getItem(k) || localStorage.getItem(k) || ''; } catch (_) { return ''; } };
+const ssSet = (k, v, keep) => { try { sessionStorage.setItem(k, v); if (keep) localStorage.setItem(k, v); } catch (_) {} };
 const ssDel = k => { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch (_) {} };
-AD.token = ssGet('dn-gh') || (() => { try { return localStorage.getItem('dn-gh') || ''; } catch (_) { return ''; } })();
+const lsJson = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v || d; } catch (_) { return d; } };
+const lsPut = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+AD.token = ssGet('dn-gh');
 const ROMAN = n => [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']].reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, '');
 const nextN = () => Math.max(0, ...E.map(e => e.n)) + 1;
 const blankVar = () => ({ form: '', ov: '', notes: '', pids: '', refs: '' });
 const blankEntry = () => ({ n: nextN(), title: '', kind: 'extra', sw: '', meaning: '', notes: '', vars: [blankVar()] });
-let ENT = blankEntry();
-try { const sv = JSON.parse(localStorage.getItem('dn-ad-entry') || 'null'); if (sv && sv.vars) ENT = sv; } catch (_) {}
-const saveLocal = () => { try { localStorage.setItem('dn-ad-entry', JSON.stringify(ENT)); } catch (_) {} };
+const blankRow = () => ({ w: '', g: '', a: '' });
+const blankEx = () => ({ num: '', dendi: '', src: '', srcUrl: '', pub: '', pubQ: '', parLabel: '', parUrl: '', lit: '', rows: [blankRow()], note: '' });
+let ENT = lsJson('dn-ad-entry', null); if (!ENT || !ENT.vars) ENT = blankEntry();
+let EX = lsJson('dn-ad-ex', null); if (!EX || !EX.rows) EX = blankEx();
+const saveLocal = () => { lsPut('dn-ad-entry', ENT); lsPut('dn-ad-ex', EX); };
 const gh = async (path, opt = {}) => {
   const r = await fetch(GH_API + path, { ...opt, headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + AD.token, ...(opt.body ? { 'Content-Type': 'application/json' } : {}) } });
   let j = null; try { j = await r.json(); } catch (_) {}
@@ -1146,12 +1159,56 @@ const parseRefs = s => s.split('\n').map(l => l.trim()).filter(Boolean).map(l =>
 });
 const paras = s => (s || '').split(/\n\s*\n/).map(p => p.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
 
+// источники и статьи хранилища: имя файла ↔ код, номер
+const SRC_ALL = [...D.sources, ...(D.rst ? [D.rst] : [])];
+const SRC_BY_ID = Object.fromEntries(SRC_ALL.map(s => [s.id, s]));
+const srcOf = code => SRC_BY_ID[SRC_IDS[code]];
+const BY_FILE = new Map(E.filter(e => e.file).map(e => [e.file, e]));
+const BY_TITLE = new Map(E.map(e => [e.title.toLowerCase(), e]));
+const artFile = a => { const e = BY_TITLE.get((a || '').trim().toLowerCase()) || BY_FILE.get((a || '').trim()); return e ? (e.file || e.title) : ''; };
+// ссылки Obsidian → метки сайта (для предпросмотра)
+const wikiMark = t => String(t || '')
+  .replace(/!\[\[[^\]]*\]\]/g, '')
+  .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, target, text) => {
+    const [folder, name] = target.includes('/') ? [target.slice(0, target.lastIndexOf('/')), target.slice(target.lastIndexOf('/') + 1)] : ['', target];
+    const tx = (text || name).trim();
+    if (folder === 'Источники') { const s = SRC_ALL.find(s => s.file === name); return s ? `⟦s:${s.id}|${tx}⟧` : tx; }
+    if (folder === 'Статьи') { const e = BY_FILE.get(name); return e ? `⟦w:${e.n}|${tx}⟧` : tx; }
+    if (folder === 'Примеры' && /^П\d+$/.test(name)) return `⟦p:${name.slice(1)}|${tx}⟧`;
+    return tx;
+  })
+  .replace(/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, tx, u) => `⟦u:${u}|${tx}⟧`);
+// коды источников в тексте, ещё не оформленные ссылкой
+function srcCodesIn(text) {
+  const bare = String(text || '').replace(/\[\[[^\]]*\]\]/g, ' ').replace(/\[[^\]]*\]\([^)]*\)/g, ' ');
+  return [...new Set(bare.match(CODE_RE) || [])].filter(c => srcOf(c) && srcOf(c).file);
+}
+function linkSrc(text, code) {
+  const s = srcOf(code); if (!s) return text;
+  return text.split(/(\[\[[^\]]*\]\]|\[[^\]]*\]\([^)]*\))/).map((part, i) => i % 2 ? part
+    : part.replace(new RegExp('(?<![\\wА-Яа-яЁё-])' + code.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '(?![\\wА-Яа-яЁё-])', 'g'), `[[Источники/${s.file}|${code}]]`)).join('');
+}
+const srcChips = id => `<div class="adsrc" data-for="${id}"></div>`;
+function drawSrcChips() {
+  document.querySelectorAll('.adsrc[data-for]').forEach(box => {
+    const el = document.getElementById(box.dataset.for); if (!el) return;
+    const cs = srcCodesIn(el.value);
+    box.innerHTML = cs.length ? `<span class="small muted">Есть в библиографии:</span> ${cs.map(c => `<button type="button" class="adchip" data-link="${esc(box.dataset.for)}" data-code="${esc(c)}" title="${esc(srcOf(c).title)}">${esc(c)} → ссылка на источник</button>`).join(' ')}` : '';
+  });
+  document.querySelectorAll('.adurl[data-src]').forEach(box => {
+    const tEl = document.getElementById(box.dataset.src), uEl = document.getElementById(box.dataset.url); if (!tEl || !uEl) return;
+    const c = (tEl.value.match(CODE_RE) || [])[0], s = c && srcOf(c);
+    box.innerHTML = s ? `<span class="small muted">Источник ${esc(c)}: ${esc(s.title)}.</span> <a class="small" href="#${s.id}" target="_blank">описание</a>${s.url && !uEl.value.trim() ? ` <button type="button" class="adchip" data-fill="${esc(box.dataset.url)}" data-u="${esc(s.url)}">подставить ссылку из библиографии</button>` : ''}` : '';
+  });
+}
+
+// ---- статья ----
 function entryMarkdown(x) {
   const t = x.title.trim() || 'Без названия', vs = x.vars.filter(v => v.form.trim() || v.notes.trim() || v.pids.trim() || v.refs.trim());
   const multi = vs.length > 1, out = [`# ${x.n}. ${t}`, ''];
   if (multi) {
     out.push('## Варианты и значения — краткий обзор', '');
-    vs.forEach((v, i) => { const L = ROMAN(i + 1), f = v.form.trim(); out.push(`- [[Статьи/${t}#${L}. ${f}|${L}. ${f}]]${v.ov.trim() ? ' — ' + v.ov.trim() : ''}`); });
+    vs.forEach((v, i) => { const L = ROMAN(i + 1), f = v.form.trim(); out.push(`- [[Статьи/${fname(t)}#${L}. ${f}|${L}. ${f}]]${v.ov.trim() ? ' — ' + v.ov.trim() : ''}`); });
     out.push('');
   }
   out.push(x.kind === 'swadesh' && x.sw ? `Сводеш № ${x.sw}` : 'Дополнительная лексика и грамматика.', '');
@@ -1171,9 +1228,9 @@ function entryMarkdown(x) {
 function entryPreview(x) {
   const vs = x.vars.filter(v => v.form.trim() || v.notes.trim() || v.pids.trim() || v.refs.trim()), multi = vs.length > 1;
   const e = {
-    n: x.n, title: x.title.trim() || 'Без названия', kind: x.kind, swadesh: x.sw, meaning: x.meaning.trim(), notes: paras(x.notes),
-    overview: multi ? vs.map((v, i) => ({ label: ROMAN(i + 1), form: v.form.trim(), note: v.ov.trim(), anchor: false })) : [],
-    variants: vs.map((v, i) => ({ label: multi ? ROMAN(i + 1) : '', form: v.form.trim(), notes: paras(v.notes), full: null, status: '',
+    n: x.n, title: x.title.trim() || 'Без названия', kind: x.kind, swadesh: x.sw, meaning: wikiMark(x.meaning.trim()), notes: paras(x.notes).map(wikiMark),
+    overview: multi ? vs.map((v, i) => ({ label: ROMAN(i + 1), form: v.form.trim(), note: wikiMark(v.ov.trim()), anchor: false })) : [],
+    variants: vs.map((v, i) => ({ label: multi ? ROMAN(i + 1) : '', form: v.form.trim(), notes: paras(v.notes).map(wikiMark), full: null, status: '',
       examples: parsePids(v.pids).filter(p => PID[p]).map((p, k) => ({ ...PID[p].ex, k: k + 1 })), refs: parseRefs(v.refs) })),
     linked: [], extra_refs: [], letter: ''
   };
@@ -1181,20 +1238,21 @@ function entryPreview(x) {
 }
 const adField = (id, label, val, attrs = '') => `<label class="adf"><span class="label">${label}</span><input id="${id}" value="${esc(val)}" ${attrs}></label>`;
 const adArea = (id, label, val, rows = 3, hint = '') => `<label class="adf"><span class="label">${label}</span><textarea id="${id}" rows="${rows}">${esc(val)}</textarea>${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
+const pidHint = v => { const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; const bad = ps.filter(p => !PID[p]); return `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}`; };
 function adEntryForm() {
   const x = ENT;
   return `<div class="adgrid">
     <div class="stack" style="gap:12px">
       <div class="adrow">${adField('ad-n', 'Номер', x.n, 'inputmode="numeric" style="max-width:7em"')}${adField('ad-title', 'Русский заголовок', x.title, 'placeholder="например, Вода"')}</div>
       <div class="adrow"><label class="adf"><span class="label">Тип статьи</span><select id="ad-kind"><option value="extra"${x.kind === 'extra' ? ' selected' : ''}>Дополнительная лексика</option><option value="swadesh"${x.kind === 'swadesh' ? ' selected' : ''}>Список Сводеша</option></select></label>${x.kind === 'swadesh' ? adField('ad-sw', '№ по Сводешу', x.sw, 'inputmode="numeric" style="max-width:7em"') : ''}</div>
-      ${adArea('ad-meaning', 'Значение и употребление', x.meaning, 3)}
-      ${adArea('ad-notes', 'Примечания к статье', x.notes, 2, 'Абзацы разделяйте пустой строкой.')}
+      ${adArea('ad-meaning', 'Значение и употребление', x.meaning, 3)}${srcChips('ad-meaning')}
+      ${adArea('ad-notes', 'Примечания к статье', x.notes, 2, 'Абзацы разделяйте пустой строкой.')}${srcChips('ad-notes')}
       ${x.vars.map((v, i) => `<fieldset class="advar" data-i="${i}"><legend>Вариант ${x.vars.length > 1 ? ROMAN(i + 1) : ''}${x.vars.length > 1 ? ` <button type="button" class="btn2 ad-delvar" data-i="${i}">Удалить</button>` : ''}</legend>
         ${adField('ad-v-form-' + i, 'Форма на денди', v.form, 'class="dn" spellcheck="false"')}
-        ${x.vars.length > 1 ? adField('ad-v-ov-' + i, 'Пояснение для краткого обзора', v.ov) : ''}
-        ${adArea('ad-v-notes-' + i, 'Заметки к варианту', v.notes, 2)}
+        ${x.vars.length > 1 ? adField('ad-v-ov-' + i, 'Пояснение для краткого обзора', v.ov) + srcChips('ad-v-ov-' + i) : ''}
+        ${adArea('ad-v-notes-' + i, 'Заметки к варианту', v.notes, 2)}${srcChips('ad-v-notes-' + i)}
         ${adField('ad-v-pids-' + i, 'Полные примеры (номера П)', v.pids, 'placeholder="например, 12, 45, 286"')}
-        <span class="small muted">${(() => { const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; const bad = ps.filter(p => !PID[p]); return `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}`; })()}</span>
+        <span class="small muted">${pidHint(v)}</span>
         ${adArea('ad-v-refs-' + i, 'Источники формы', v.refs, 2, 'По одному на строку: «текст | ссылка» или [текст](ссылка).')}
       </fieldset>`).join('')}
       <div class="adrow"><button type="button" class="btn2" id="ad-addvar">+ Вариант</button><button type="button" class="btn2" id="ad-reset">Очистить форму</button></div>
@@ -1202,70 +1260,198 @@ function adEntryForm() {
     <div class="stack" style="gap:10px">
       <span class="label">Как будет выглядеть статья</span>
       <div class="adprev" id="ad-prev">${entryPreview(x)}</div>
-      <details><summary class="small">Текст заметки для Obsidian</summary><textarea id="ad-md" rows="12" readonly class="admd">${esc(entryMarkdown(x))}</textarea><button type="button" class="btn2" id="ad-copy">Скопировать</button></details>
+      <details><summary class="small">Текст заметки для Obsidian</summary><textarea id="ad-md" rows="12" readonly class="admd">${esc(entryMarkdown(x))}</textarea><button type="button" class="btn2 ad-copy" data-src="ad-md">Скопировать</button></details>
       <button type="button" class="btn" id="ad-save-entry">Сохранить в «Черновики»</button>
     </div>
   </div>`;
 }
+
+// ---- пример ----
+const exNum = () => EX.num || String(AD.nextP || Math.max(0, ...PIDS.map(p => +p.slice(1))) + 1);
+function exParse(x, withLinks) {
+  return x.rows.filter(r => r.w.trim() && r.g.trim()).map(r => {
+    const f = withLinks && artFile(r.a);
+    return `${f ? `[[Статьи/${f}|${r.w.trim()}]]` : r.w.trim()} — ${r.g.trim()}`;
+  }).join('; ');
+}
+function exMarkdown(x) {
+  const n = exNum(), out = [`# П${n}`, '', `Денди: ${x.dendi.trim()}`, ''];
+  out.push(x.srcUrl.trim() ? `[Источник: ${x.src.trim()}](${x.srcUrl.trim()})` : `Источник: ${x.src.trim()}`, '');
+  if (x.pub.trim()) out.push(`Опубликованный русский перевод${x.pubQ.trim() ? ` (${x.pubQ.trim()})` : ''}: ${x.pub.trim()}`, '');
+  if (x.parUrl.trim()) out.push(`[${x.parLabel.trim() || 'Русский параллельный текст'}](${x.parUrl.trim()})`, '');
+  out.push(`Авторский дословный перевод: ${x.lit.trim()}`, '', `Разбор по словам: ${exParse(x, true)}`, '');
+  if (x.note.trim()) out.push(`Примечание: ${x.note.trim().replace(/\s*\n\s*/g, ' ')}`, '');
+  const arts = [...new Set(x.rows.map(r => artFile(r.a)).filter(Boolean))];
+  if (arts.length) out.push('## Статьи слов примера', '', arts.map(f => `[[Статьи/${f}|${BY_FILE.get(f) ? BY_FILE.get(f).title : f}]]`).join(' · '), '');
+  return out.join('\n').trim() + '\n';
+}
+function exPreview(x) {
+  const q = x.pubQ.trim(), rst = /^Синодальн/.test(q) || /Синодальн|\bRST\b/.test(x.parLabel);
+  const ex = { pid: 'П' + exNum(), dendi: x.dendi.trim() || '…', source: x.src.trim(), source_url: x.srcUrl.trim(), pub: x.pub.trim(), pub_q: q.replace(/^Синодальн\w*,?\s*/, ''), rst,
+    pub_label: x.parLabel.trim() || 'Русский параллельный текст', pub_url: x.parUrl.trim(), lit: x.lit.trim() || '…', parse: exParse(x, false), note: wikiMark(x.note.trim()) };
+  return exCard(ex, null);
+}
+const exMissing = x => [['dendi', 'фраза на денди'], ['src', 'источник'], ['lit', 'дословный перевод']].filter(([k]) => !x[k].trim()).map(([, l]) => l).concat(exParse(x, false) ? [] : ['разбор по словам']);
+function adExForm() {
+  const x = EX;
+  return `<div class="adgrid">
+    <div class="stack" style="gap:12px">
+      <div class="adrow">${adField('ad-x-num', 'Номер П', exNum(), 'inputmode="numeric" style="max-width:7em"')}<span class="small muted">Следующий свободный номер подставляется сам.</span></div>
+      ${adArea('ad-x-dendi', 'Фраза на денди', x.dendi, 2).replace('<textarea', '<textarea class="dn" spellcheck="false"')}
+      <div class="adrow">${adField('ad-x-src', 'Источник', x.src, 'placeholder="например, NT18, Ин 1:38"')}${adField('ad-x-srcUrl', 'Ссылка на место в источнике', x.srcUrl, 'placeholder="https://…"')}</div>
+      <div class="adurl" data-src="ad-x-src" data-url="ad-x-srcUrl"></div>
+      ${adArea('ad-x-pub', 'Опубликованный русский перевод (если есть)', x.pub, 2)}
+      ${adField('ad-x-pubQ', 'Уточнение к переводу', x.pubQ, 'placeholder="например, Синодальный, полный соответствующий стих"')}
+      <div class="adrow">${adField('ad-x-parLabel', 'Подпись ссылки на параллельный текст', x.parLabel, 'placeholder="Русский параллельный текст RST"')}${adField('ad-x-parUrl', 'Ссылка на параллельный текст', x.parUrl, 'placeholder="https://…"')}</div>
+      ${adArea('ad-x-lit', 'Авторский дословный перевод', x.lit, 2)}
+      <fieldset class="advar"><legend>Разбор по словам</legend>
+        <datalist id="ad-titles">${E.map(e => `<option value="${esc(e.title)}">`).join('')}</datalist>
+        ${x.rows.map((r, i) => `<div class="adrow adparse">${adField('ad-x-w-' + i, i ? '' : 'Слово', r.w, 'class="dn" spellcheck="false"')}${adField('ad-x-g-' + i, i ? '' : 'Значение', r.g)}${adField('ad-x-a-' + i, i ? '' : 'Статья словаря', r.a, 'list="ad-titles" placeholder="необязательно"')}<button type="button" class="btn2 ad-delrow" data-i="${i}" aria-label="Удалить строку">×</button></div>`).join('')}
+        <div class="adrow"><button type="button" class="btn2" id="ad-addrow">+ Слово</button><button type="button" class="btn2" id="ad-splitrow">Разбить фразу на слова</button></div>
+        <span class="small muted">Статью выбирайте из подсказок: так в разборе появится ссылка на неё.</span>
+      </fieldset>
+      ${adArea('ad-x-note', 'Примечание', x.note, 2)}${srcChips('ad-x-note')}
+      <div class="adrow"><button type="button" class="btn2" id="ad-x-reset">Очистить форму</button></div>
+    </div>
+    <div class="stack" style="gap:10px">
+      <span class="label">Как будет выглядеть пример</span>
+      <div class="adprev" id="ad-x-prev">${exPreview(x)}</div>
+      <details><summary class="small">Текст заметки для Obsidian</summary><textarea id="ad-x-md" rows="12" readonly class="admd">${esc(exMarkdown(x))}</textarea><button type="button" class="btn2 ad-copy" data-src="ad-x-md">Скопировать</button></details>
+      <p class="small muted" id="ad-x-miss">${exMissing(x).length ? 'Не заполнено: ' + exMissing(x).join(', ') + '.' : ''}</p>
+      <button type="button" class="btn" id="ad-save-ex">Сохранить в «Примеры»</button>
+      <span class="small muted">Пример появится на сайте, когда его номер будет указан в статье (в конструкторе — в поле «Полные примеры») и сайт обновится.</span>
+    </div>
+  </div>`;
+}
+
+// ---- заметки и черновики ----
 function adNoteForm() {
   const nt = AD.note;
   return `<div class="stack" style="gap:12px;max-width:760px">
-    ${adField('ad-nt-title', 'Название заметки', nt.title)}
-    ${adArea('ad-nt-body', 'Текст', nt.body, 14, 'Обычный текст или Markdown, как в Obsidian.')}
+    ${adField('ad-nt-title', 'Название', nt.title)}
+    ${adArea('ad-nt-body', 'Текст', nt.body, 16, 'Обычный текст или Markdown, как в Obsidian.')}${srcChips('ad-nt-body')}
     <div class="adrow"><button type="button" class="btn" id="ad-save-note">${nt.sha ? 'Сохранить изменения' : 'Сохранить в «Черновики/Заметки»'}</button>${nt.path ? `<button type="button" class="btn2" id="ad-new-note">Новая заметка</button><span class="small muted">${esc(nt.path)}</span>` : ''}</div>
   </div>`;
 }
 function adDrafts() {
   if (!AD.drafts) return '<p class="small muted">Загружаю список…</p>';
   if (!AD.drafts.length) return '<p class="small muted">В папке «Черновики» пока пусто.</p>';
-  return `<ul class="res">${AD.drafts.map(f => `<li><span class="rt">${esc(f.path.replace(/^Черновики\//, ''))}</span><span class="rx"><button type="button" class="btn2 ad-open" data-p="${esc(f.path)}">Редактировать как текст</button> <a href="${esc(f.html_url)}" target="_blank" rel="noopener">на GitHub</a></span></li>`).join('')}</ul>`;
+  return `<ul class="res">${AD.drafts.map(f => {
+    const isArt = /^Черновики\/[^/]+\.md$/.test(f.path);
+    return `<li><span class="rt">${esc(f.path.replace(/^Черновики\//, ''))}</span><span class="rx adrow"><button type="button" class="btn2 ad-open" data-p="${esc(f.path)}">Редактировать как текст</button>${isArt ? `<button type="button" class="btn2 ad-publish" data-p="${esc(f.path)}">Перенести в словарь</button>` : ''}<a href="${esc(f.html_url)}" target="_blank" rel="noopener">на GitHub</a></span></li>`;
+  }).join('')}</ul><p class="small muted">«Перенести в словарь» перемещает черновик статьи в папку «Статьи». На сайте статья появится после следующего обновления.</p>`;
 }
 function vAdmin() {
   if (!AD.ok) return `<div class="stack" style="gap:16px;max-width:640px">
-    <h1>Редактор</h1>
-    <p>Раздел для заметок и черновиков статей. Он работает только у владельца хранилища: GitHub проверяет, что ключ принадлежит администратору репозитория <b>${GH_REPO}</b>. Черновики сохраняются в папку «Черновики» хранилища и на сайт не выводятся.</p>
+    <h1>Вход для редактора</h1>
+    <p>Редактор работает только у владельца хранилища: GitHub проверяет, что ключ принадлежит администратору репозитория <b>${GH_REPO}</b>. После входа можно создавать черновики статей, заметки и новые примеры, переносить черновики в словарь и править существующие статьи.</p>
     <form id="ad-login" class="stack" style="gap:8px"><label class="adf"><span class="label">Личный ключ GitHub (fine-grained token)</span><input id="ad-tok" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
       <label class="chk"><input type="checkbox" id="ad-rem"> <span>Запомнить на этом устройстве</span></label>
       <div class="adrow"><button type="submit" class="btn">Войти</button></div>
       <p class="small" id="ad-err" aria-live="polite">${esc(AD.msg)}</p></form>
     <details class="box"><summary><b>Как получить ключ</b></summary><ol class="mdl" style="margin-top:8px">
-      <li>GitHub → аватар → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
+      <li>Откройте <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> (или GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token).</li>
       <li>Repository access: <b>Only select repositories</b> → <b>Dendi-dictionary</b>.</li>
       <li>Permissions → Repository permissions → <b>Contents: Read and write</b> (Metadata: Read-only добавится сам).</li>
-      <li>Срок действия — по желанию; скопируйте ключ и вставьте его сюда. Никому его не пересылайте.</li></ol>
+      <li>Нажмите Generate token, скопируйте ключ и вставьте его сюда. Никому его не пересылайте.</li></ol>
       <p class="small muted">Ключ хранится только в этом браузере и отправляется только на api.github.com.</p></details>
   </div>`;
   const tab = (k, l) => `<button type="button" class="pdir${AD.tab === k ? ' on' : ''}" data-adtab="${k}" aria-pressed="${AD.tab === k}">${l}</button>`;
   return `<div class="stack" style="gap:16px">
     <div class="adrow" style="justify-content:space-between"><h1>Редактор</h1><span class="small muted">${esc(AD.user)} · <button type="button" class="linklike" id="ad-logout">Выйти</button></span></div>
-    <div class="pdirs" role="group" aria-label="Режим">${tab('entry', 'Словарная статья')}${tab('note', 'Заметка')}${tab('drafts', 'Черновики')}</div>
+    <div class="pdirs" role="group" aria-label="Режим">${tab('entry', 'Словарная статья')}${tab('example', 'Пример')}${tab('note', 'Заметка')}${tab('drafts', 'Черновики')}</div>
     <p class="small" id="ad-msg" aria-live="polite">${esc(AD.msg)}</p>
-    <div id="ad-body">${AD.tab === 'entry' ? adEntryForm() : AD.tab === 'note' ? adNoteForm() : adDrafts()}</div>
+    <div id="ad-body">${AD.tab === 'entry' ? adEntryForm() : AD.tab === 'example' ? adExForm() : AD.tab === 'note' ? adNoteForm() : adDrafts()}</div>
+    <p class="small muted">Чтобы исправить существующую статью, откройте её на сайте и нажмите «Редактировать статью».</p>
   </div>`;
 }
-const adRender = () => { if (location.hash === '#admin') { V.innerHTML = vAdmin(); if (AD.ok && AD.tab === 'drafts' && !AD.drafts) adLoadDrafts(); } };
+
+// ---- правка существующей статьи ----
+const ED = { n: 0, path: '', text: '', sha: '', state: '' };
+function vEdit(n) {
+  const e = byN[n];
+  if (!e) return vHome();
+  if (!AD.ok) return `<div class="stack"><h1>Правка статьи</h1><p>Править статьи может только редактор. <a href="#admin">Войти по ключу</a>.</p></div>`;
+  if (ED.n !== n) { ED.n = n; ED.path = `Статьи/${e.file || fname(e.title)}.md`; ED.text = ''; ED.sha = ''; ED.state = 'loading'; edLoad(); }
+  return `<div class="stack" style="gap:12px">
+    <div class="crumbs"><a href="#w${n}">${esc(e.title)}</a><span>›</span><span>правка</span></div>
+    <h1>Правка: ${esc(e.title)}</h1>
+    <p class="small muted">Файл хранилища: ${esc(ED.path)}. Изменения сохраняются прямо в хранилище; на сайте они появятся после следующего обновления.</p>
+    <p class="small" id="ad-msg" aria-live="polite">${esc(AD.msg)}</p>
+    ${ED.state === 'loading' ? '<p class="muted">Загружаю статью из хранилища…</p>' : ED.state === 'error' ? '' : `
+    ${adArea('ad-ed-text', 'Текст статьи (Markdown, как в Obsidian)', ED.text, 26)}${srcChips('ad-ed-text')}
+    <div class="adrow">${adField('ad-ed-pid', 'Вставить пример (номер П)', '', 'inputmode="numeric" style="max-width:9em"')}<button type="button" class="btn2" id="ad-ed-ins">Вставить в место курсора</button></div>
+    <div class="adrow"><button type="button" class="btn" id="ad-ed-save">Сохранить статью</button><a class="btn2" href="#w${n}">Отмена</a></div>`}
+  </div>`;
+}
+async function edLoad() {
+  const n = ED.n;
+  const r = await gh('/contents/' + encPath(ED.path) + '?ref=' + encodeURIComponent(AD.branch));
+  if (ED.n !== n) return;
+  if (!r.ok) { ED.state = 'error'; AD.msg = 'Не удалось открыть файл статьи (' + r.status + '). Возможно, файл переименован в хранилище; тогда обновите сайт.'; }
+  else { ED.text = b64dec(r.j.content); ED.sha = r.j.sha; ED.state = 'ready'; AD.msg = ''; }
+  if (location.hash === '#edit-' + n) { V.innerHTML = vEdit(n); drawSrcChips(); }
+}
+async function edSave() {
+  const el = document.getElementById('ad-ed-text'); if (!el) return;
+  const text = el.value.endsWith('\n') ? el.value : el.value + '\n';
+  if (!/^#\s+\d+\.\s+\S/.test(text)) return adMsg('Первая строка должна оставаться вида «# номер. Заголовок», иначе сборка сайта остановится.');
+  try {
+    adMsg('Сохраняю…');
+    ED.sha = await adPut(ED.path, text, ED.sha, 'Правка статьи'); ED.text = text;
+    adMsg('Сохранено в хранилище. На сайте изменения появятся после обновления.');
+  } catch (err) { adMsg(err.message); }
+}
+
+// ---- общий доступ к GitHub ----
+const adRender = () => {
+  const h = location.hash;
+  if (h === '#admin') { V.innerHTML = vAdmin(); drawSrcChips(); if (AD.ok && AD.tab === 'drafts' && !AD.drafts) adLoadDrafts(); if (AD.ok && AD.tab === 'example' && !AD.nextP) adNextP(); }
+  else if (/^#edit-\d+$/.test(h)) { V.innerHTML = vEdit(+h.slice(6)); drawSrcChips(); }
+};
 const adMsg = t => { AD.msg = t; const el = document.getElementById('ad-msg') || document.getElementById('ad-err'); if (el) el.textContent = t; };
+function adNav() {
+  const a = document.getElementById('navadmin'); if (a) a.textContent = AD.ok ? 'Редактор' : 'Вход';
+  document.querySelectorAll('.adedit').forEach(x => x.hidden = !AD.ok);
+}
 async function adCheck() {
   if (!AD.token) return;
-  adMsg('Проверяю доступ…');
+  const loud = location.hash === '#admin';
+  if (loud) adMsg('Проверяю доступ…');
   try {
     const r = await gh('');
-    if (r.status === 401) { AD.ok = false; adMsg('GitHub не принял ключ: он неверный или истёк.'); ssDel('dn-gh'); AD.token = ''; return adRender(); }
-    if (!r.ok) { AD.ok = false; adMsg('Нет доступа к хранилищу с этим ключом (GitHub ответил ' + r.status + '). Проверьте, что в ключе выбран репозиторий Dendi-dictionary.'); return adRender(); }
-    if (!(r.j.permissions && r.j.permissions.admin)) { AD.ok = false; adMsg('Ключ работает, но у его владельца нет прав администратора репозитория.'); return adRender(); }
-    AD.ok = true; AD.branch = r.j.default_branch || 'main';
-    const u = await fetch('https://api.github.com/user', { headers: { Authorization: 'Bearer ' + AD.token } }).then(x => x.ok ? x.json() : null).catch(() => null);
-    AD.user = u && u.login || ''; AD.msg = ''; adRender();
-  } catch (err) { AD.ok = false; adMsg('Не удалось связаться с GitHub. Проверьте интернет и попробуйте ещё раз.'); adRender(); }
+    AD.checked = true;
+    if (r.status === 401) { AD.ok = false; AD.msg = 'GitHub не принял ключ: он неверный или истёк.'; ssDel('dn-gh'); AD.token = ''; }
+    else if (!r.ok) { AD.ok = false; AD.msg = 'Нет доступа к хранилищу с этим ключом (GitHub ответил ' + r.status + '). Проверьте, что в ключе выбран репозиторий Dendi-dictionary.'; }
+    else if (!(r.j.permissions && r.j.permissions.admin)) { AD.ok = false; AD.msg = 'Ключ работает, но у его владельца нет прав администратора репозитория.'; }
+    else {
+      AD.ok = true; AD.branch = r.j.default_branch || 'main'; AD.msg = '';
+      const u = await fetch('https://api.github.com/user', { headers: { Authorization: 'Bearer ' + AD.token } }).then(x => x.ok ? x.json() : null).catch(() => null);
+      AD.user = u && u.login || '';
+    }
+  } catch (err) { AD.ok = false; AD.msg = 'Не удалось связаться с GitHub. Проверьте интернет и попробуйте ещё раз.'; }
+  adNav(); adRender();
 }
 async function adPut(path, text, sha, what) {
-  const r = await gh('/contents/' + encPath(path), { method: 'PUT', body: JSON.stringify({ message: `${what}: ${path.replace(/^Черновики\//, '')}`, content: b64enc(text), branch: AD.branch, ...(sha ? { sha } : {}) }) });
+  const r = await gh('/contents/' + encPath(path), { method: 'PUT', body: JSON.stringify({ message: `${what}: ${path}`, content: b64enc(text), branch: AD.branch, ...(sha ? { sha } : {}) }) });
   if (r.ok) return r.j.content.sha;
   if (r.status === 403 || r.status === 404) throw new Error('GitHub не дал записать файл. У ключа должно быть разрешение Contents: Read and write.');
-  if (r.status === 409 || r.status === 422) throw new Error('Файл изменился на GitHub после открытия. Откройте его заново из «Черновиков».');
+  if (r.status === 409 || r.status === 422) throw new Error('Файл изменился на GitHub после открытия. Откройте его заново.');
   throw new Error('GitHub ответил ' + r.status + (r.j && r.j.message ? ': ' + r.j.message : ''));
 }
-async function adSha(path) { const r = await gh('/contents/' + encPath(path) + '?ref=' + encodeURIComponent(AD.branch)); return r.ok ? r.j.sha : ''; }
+async function adDel(path, sha, what) {
+  const r = await gh('/contents/' + encPath(path), { method: 'DELETE', body: JSON.stringify({ message: `${what}: ${path}`, sha, branch: AD.branch }) });
+  if (!r.ok) throw new Error('Не удалось убрать файл ' + path + ' (' + r.status + ').');
+}
+async function adGet(path) { const r = await gh('/contents/' + encPath(path) + '?ref=' + encodeURIComponent(AD.branch)); return r.ok && !Array.isArray(r.j) ? { sha: r.j.sha, text: b64dec(r.j.content || '') } : null; }
+async function adSha(path) { const f = await adGet(path); return f ? f.sha : ''; }
+async function adNextP() {
+  const r = await gh('/contents/' + encPath('Примеры') + '?ref=' + encodeURIComponent(AD.branch));
+  if (r.ok && Array.isArray(r.j)) {
+    AD.nextP = Math.max(0, ...r.j.map(f => (f.name.match(/^П(\d+)\.md$/) || [0, 0])[1] * 1), ...PIDS.map(p => +p.slice(1))) + 1;
+    const el = document.getElementById('ad-x-num'); if (el && !EX.num) { el.value = AD.nextP; refreshEx(); }
+  }
+}
 async function adSaveEntry() {
   if (!ENT.title.trim()) return adMsg('Укажите русский заголовок статьи.');
   const path = `Черновики/${fname(ENT.title)}.md`;
@@ -1274,18 +1460,30 @@ async function adSaveEntry() {
     const sha = await adSha(path);
     if (sha && !confirm(`Черновик «${path.slice(10)}» уже есть. Заменить его?`)) return adMsg('');
     await adPut(path, entryMarkdown(ENT), sha, 'Черновик статьи');
-    AD.drafts = null; adMsg(`Сохранено: ${path}. Файл появится в Obsidian после синхронизации хранилища.`);
+    AD.drafts = null; adMsg(`Сохранено: ${path}. Перенести в словарь можно во вкладке «Черновики».`);
+  } catch (err) { adMsg(err.message); }
+}
+async function adSaveEx() {
+  const miss = exMissing(EX); if (miss.length) return adMsg('Заполните: ' + miss.join(', ') + '.');
+  const n = exNum(), path = `Примеры/П${n}.md`;
+  if (PID['П' + n]) return adMsg(`Номер П${n} уже занят. Укажите другой номер.`);
+  try {
+    adMsg('Сохраняю…');
+    if (await adSha(path)) return adMsg(`В хранилище уже есть П${n}. Укажите другой номер.`);
+    await adPut(path, exMarkdown(EX), '', 'Новый пример');
+    adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
+    EX = blankEx(); AD.nextP = (+n) + 1; saveLocal(); adRender(); adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
   } catch (err) { adMsg(err.message); }
 }
 async function adSaveNote() {
-  const nt = AD.note; if (!nt.title.trim()) return adMsg('Укажите название заметки.');
+  const nt = AD.note; if (!nt.title.trim()) return adMsg('Укажите название.');
   const path = nt.path || `Черновики/Заметки/${fname(nt.title)}.md`;
   try {
     adMsg('Сохраняю…');
     let sha = nt.sha;
-    if (!sha) { sha = await adSha(path); if (sha && !confirm(`Заметка «${path.slice(10)}» уже есть. Заменить её?`)) return adMsg(''); }
+    if (!sha) { sha = await adSha(path); if (sha && !confirm(`«${path}» уже есть. Заменить?`)) return adMsg(''); }
     nt.sha = await adPut(path, nt.body.endsWith('\n') ? nt.body : nt.body + '\n', sha, 'Заметка'); nt.path = path;
-    AD.drafts = null; adMsg(`Сохранено: ${path}.`); adRender();
+    AD.drafts = null; adRender(); adMsg(`Сохранено: ${path}.`);
   } catch (err) { adMsg(err.message); }
 }
 async function adLoadDrafts() {
@@ -1295,17 +1493,33 @@ async function adLoadDrafts() {
   if (AD.tab === 'drafts') adRender();
 }
 async function adOpen(path) {
-  const r = await gh('/contents/' + encPath(path) + '?ref=' + encodeURIComponent(AD.branch));
-  if (!r.ok) return adMsg('Не удалось открыть файл (' + r.status + ').');
-  AD.note = { title: path.replace(/^.*\//, '').replace(/\.md$/i, ''), body: b64dec(r.j.content), path, sha: r.j.sha };
+  const f = await adGet(path);
+  if (!f) return adMsg('Не удалось открыть файл.');
+  AD.note = { title: path.replace(/^.*\//, '').replace(/\.md$/i, ''), body: f.text, path, sha: f.sha };
   AD.tab = 'note'; AD.msg = ''; adRender();
+}
+async function adPublish(path) {
+  try {
+    adMsg('Проверяю черновик…');
+    const f = await adGet(path); if (!f) return adMsg('Не удалось открыть черновик.');
+    const m = f.text.match(/^#\s+(\d+)\.\s+(.+?)\s*(\^[\w-]+)?\s*$/m);
+    if (!m || f.text.trimStart().indexOf(m[0].trim()) !== 0) return adMsg('Первая строка черновика должна быть вида «# номер. Заголовок».');
+    const n = +m[1], title = m[2].trim(), clash = byN[n];
+    const target = 'Статьи/' + path.replace(/^Черновики\//, '');
+    if (await adSha(target)) return adMsg(`В «Статьях» уже есть файл ${target.slice(7)}. Переименуйте черновик или поправьте статью вручную.`);
+    if (clash && clash.title !== title) return adMsg(`Номер ${n} уже занят статьёй «${clash.title}». Исправьте номер в черновике (например, на ${nextN()}) и повторите.`);
+    if (!confirm(`Перенести «${title}» (№ ${n}) из черновиков в словарь?`)) return adMsg('');
+    adMsg('Переношу…');
+    await adPut(target, f.text, '', 'Новая статья из черновика');
+    await adDel(path, f.sha, 'Черновик перенесён в словарь');
+    AD.drafts = null; adRender(); adMsg(`Готово: ${target}. Статья появится на сайте после обновления.`);
+  } catch (err) { adMsg(err.message); }
 }
 document.addEventListener('submit', ev => {
   if (ev.target.id !== 'ad-login') return;
   ev.preventDefault();
   AD.token = document.getElementById('ad-tok').value.trim(); if (!AD.token) return adMsg('Вставьте ключ.');
-  ssSet('dn-gh', AD.token);
-  if (document.getElementById('ad-rem').checked) { try { localStorage.setItem('dn-gh', AD.token); } catch (_) {} }
+  ssSet('dn-gh', AD.token, document.getElementById('ad-rem').checked);
   adCheck();
 });
 const adSync = () => {
@@ -1315,34 +1529,80 @@ const adSync = () => {
     ['title', 'meaning', 'notes'].forEach(k => { const v = g('ad-' + k); if (v !== null) ENT[k] = v; });
     const kd = g('ad-kind'); if (kd !== null) ENT.kind = kd; const sw = g('ad-sw'); if (sw !== null) ENT.sw = sw;
     ENT.vars.forEach((v, i) => ['form', 'ov', 'notes', 'pids', 'refs'].forEach(k => { const val = g(`ad-v-${k}-${i}`); if (val !== null) v[k] = val; }));
-    saveLocal();
+  } else if (AD.tab === 'example') {
+    const num = g('ad-x-num'); if (num !== null) EX.num = num.replace(/\D/g, '') === String(AD.nextP || '') ? '' : num.replace(/\D/g, '');
+    ['dendi', 'src', 'srcUrl', 'pub', 'pubQ', 'parLabel', 'parUrl', 'lit', 'note'].forEach(k => { const v = g('ad-x-' + k); if (v !== null) EX[k] = v; });
+    EX.rows.forEach((r, i) => ['w', 'g', 'a'].forEach(k => { const v = g(`ad-x-${k}-${i}`); if (v !== null) r[k] = v; }));
   } else if (AD.tab === 'note') { const t = g('ad-nt-title'), b = g('ad-nt-body'); if (t !== null) AD.note.title = t; if (b !== null) AD.note.body = b; }
+  saveLocal();
 };
+function refreshEx() {
+  const p = document.getElementById('ad-x-prev'), md = document.getElementById('ad-x-md'), ms = document.getElementById('ad-x-miss');
+  if (p) p.innerHTML = exPreview(EX); if (md) md.value = exMarkdown(EX);
+  if (ms) { const m = exMissing(EX); ms.textContent = m.length ? 'Не заполнено: ' + m.join(', ') + '.' : ''; }
+}
 let adT;
 document.addEventListener('input', ev => {
-  if (!ev.target.id || !ev.target.id.startsWith('ad-') || ev.target.id === 'ad-tok') return;
+  const id = ev.target.id || '';
+  if (!id.startsWith('ad-') || id === 'ad-tok') return;
+  if (id === 'ad-ed-text') { clearTimeout(adT); adT = setTimeout(drawSrcChips, 300); return; }
+  if (id === 'ad-ed-pid') return;
   adSync();
-  if (AD.tab !== 'entry') return;
   clearTimeout(adT);
   adT = setTimeout(() => {
+    drawSrcChips();
+    if (AD.tab === 'example') return refreshEx();
+    if (AD.tab !== 'entry') return;
     const p = document.getElementById('ad-prev'), md = document.getElementById('ad-md');
     if (p) p.innerHTML = entryPreview(ENT); if (md) md.value = entryMarkdown(ENT);
-    ENT.vars.forEach((v, i) => { const el = document.getElementById('ad-v-pids-' + i); if (el && el.closest('label').nextElementSibling) { const ps = parsePids(v.pids), bad = ps.filter(q => !PID[q]); el.closest('label').nextElementSibling.textContent = ps.length ? `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}` : 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; } });
+    ENT.vars.forEach((v, i) => { const el = document.getElementById('ad-v-pids-' + i), hint = el && el.closest('label').nextElementSibling; if (hint) hint.textContent = pidHint(v); });
   }, 200);
 });
 document.addEventListener('change', ev => { if (ev.target.id === 'ad-kind') { adSync(); adRender(); } });
 document.addEventListener('click', ev => {
-  const t = ev.target; if (!t.closest || location.hash !== '#admin') return;
+  const t = ev.target; if (!t.closest) return;
+  const onAdmin = location.hash === '#admin', onEdit = /^#edit-\d+$/.test(location.hash);
+  if (!onAdmin && !onEdit) return;
+  // общие для редактора кнопки
+  const ch = t.closest('[data-link]');
+  if (ch) { const el = document.getElementById(ch.dataset.link); if (el) { el.value = linkSrc(el.value, ch.dataset.code); el.dispatchEvent(new Event('input', { bubbles: true })); } return; }
+  const fl = t.closest('[data-fill]');
+  if (fl) { const el = document.getElementById(fl.dataset.fill); if (el) { el.value = fl.dataset.u; el.dispatchEvent(new Event('input', { bubbles: true })); } return; }
+  const cp = t.closest('.ad-copy');
+  if (cp) { const md = document.getElementById(cp.dataset.src); md.select(); try { navigator.clipboard.writeText(md.value); } catch (_) { document.execCommand('copy'); } adMsg('Текст скопирован.'); return; }
+  if (onEdit) {
+    if (t.closest('#ad-ed-save')) { edSave(); return; }
+    if (t.closest('#ad-ed-ins')) {
+      const d = (document.getElementById('ad-ed-pid').value.match(/\d+/) || [''])[0], ta = document.getElementById('ad-ed-text');
+      if (!d) return adMsg('Введите номер примера.');
+      if (!PID['П' + d]) adMsg(`Внимание: П${d} пока нет на сайте; проверьте, что он есть в хранилище.`);
+      const ins = `\n### Пример П${d}\n\n![[Примеры/П${d}]]\n`, a = ta.selectionStart ?? ta.value.length;
+      ta.value = ta.value.slice(0, a) + ins + ta.value.slice(a); ta.focus(); ta.setSelectionRange(a + ins.length, a + ins.length); return;
+    }
+    return;
+  }
   const tb = t.closest('[data-adtab]'); if (tb) { adSync(); AD.tab = tb.dataset.adtab; AD.msg = ''; adRender(); return; }
-  if (t.closest('#ad-logout')) { ssDel('dn-gh'); AD.token = ''; AD.ok = false; AD.msg = ''; adRender(); return; }
+  if (t.closest('#ad-logout')) { ssDel('dn-gh'); AD.token = ''; AD.ok = false; AD.msg = ''; adNav(); adRender(); return; }
   if (t.closest('#ad-addvar')) { adSync(); ENT.vars.push(blankVar()); saveLocal(); adRender(); return; }
   const dv = t.closest('.ad-delvar'); if (dv) { adSync(); ENT.vars.splice(+dv.dataset.i, 1); saveLocal(); adRender(); return; }
   if (t.closest('#ad-reset')) { if (confirm('Очистить форму статьи?')) { ENT = blankEntry(); saveLocal(); adRender(); } return; }
-  if (t.closest('#ad-copy')) { const md = document.getElementById('ad-md'); md.select(); try { navigator.clipboard.writeText(md.value); } catch (_) { document.execCommand('copy'); } adMsg('Текст скопирован.'); return; }
+  if (t.closest('#ad-addrow')) { adSync(); EX.rows.push(blankRow()); saveLocal(); adRender(); return; }
+  const dr = t.closest('.ad-delrow'); if (dr) { adSync(); EX.rows.splice(+dr.dataset.i, 1); if (!EX.rows.length) EX.rows.push(blankRow()); saveLocal(); adRender(); return; }
+  if (t.closest('#ad-splitrow')) {
+    adSync();
+    const ws = tokenize(EX.dendi); if (!ws.length) return adMsg('Сначала впишите фразу на денди.');
+    const old = EX.rows.filter(r => r.w.trim() || r.g.trim() || r.a.trim());
+    if (old.length && !confirm('Заменить строки разбора словами из фразы?')) return;
+    EX.rows = ws.map(w => { const fs = FORM_IDX.get(foldDn(w)) || [], f = fs.find(x => sameSpelling(x.form, w)) || fs[0]; return { w, g: '', a: f ? f.e.title : '' }; });
+    saveLocal(); adRender(); return;
+  }
+  if (t.closest('#ad-x-reset')) { if (confirm('Очистить форму примера?')) { EX = blankEx(); saveLocal(); adRender(); } return; }
   if (t.closest('#ad-save-entry')) { adSync(); adSaveEntry(); return; }
+  if (t.closest('#ad-save-ex')) { adSync(); adSaveEx(); return; }
   if (t.closest('#ad-save-note')) { adSync(); adSaveNote(); return; }
   if (t.closest('#ad-new-note')) { AD.note = { title: '', body: '', path: '', sha: '' }; AD.msg = ''; adRender(); return; }
   const op = t.closest('.ad-open'); if (op) { adOpen(op.dataset.p); return; }
+  const pb = t.closest('.ad-publish'); if (pb) { adPublish(pb.dataset.p); return; }
 });
 
 // маршруты
@@ -1363,10 +1623,12 @@ function route() {
   else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }
-  else if (h === 'admin') { html = vAdmin(); title = 'Редактор · Словарь денди'; if (!AD.ok && AD.token) setTimeout(adCheck, 0); }
+  else if (h === 'admin') { html = vAdmin(); nav = 'admin'; title = 'Редактор · Словарь денди'; if (!AD.ok && AD.token && !AD.checked) setTimeout(adCheck, 0); }
+  else if ((m = h.match(/^edit-(\d+)$/)) && byN[+m[1]]) { html = vEdit(+m[1]); title = 'Правка: ' + byN[+m[1]].title + ' · Словарь денди'; }
   else if (PAGES[h]) { html = PAGES[h][1](); nav = h; title = PAGES[h][0] + ' · Словарь денди'; }
   else { html = vHome(); nav = 'home'; }
   V.innerHTML = html;
+  if (h === 'admin' || /^edit-\d+$/.test(h)) drawSrcChips();
   document.body.classList.toggle('wide', nav === 'grammar' || h === 'admin');
   document.title = title;
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === nav));
@@ -1510,4 +1772,5 @@ document.getElementById('inex').addEventListener('change', ev => {
 });
 document.getElementById('foot').textContent = `Свод не является нормативным словарём языка.${D.built ? ' Данные документа на ' + D.built + '.' : ''}`;
 route(); spy();
+if (AD.token) adCheck();
 </script>
