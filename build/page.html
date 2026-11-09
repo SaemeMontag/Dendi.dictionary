@@ -1125,7 +1125,7 @@ if (document.addEventListener) {
 // Доступ проверяет GitHub: личный ключ владельца хранилища с правом admin на репозиторий.
 // Черновики пишутся в «Черновики» (сборка их не читает); новые примеры — в «Примеры»; правка и перенос — в «Статьи».
 const GH_REPO = 'SaemeMontag/Dendi-dictionary', GH_API = 'https://api.github.com/repos/' + GH_REPO;
-const AD = { token: '', ok: false, checked: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '', nextP: 0 };
+const AD = { token: '', ok: false, checked: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '', nextP: 0, vaultP: new Set(), exCache: {}, exLoading: new Set() };
 const ssGet = k => { try { return sessionStorage.getItem(k) || localStorage.getItem(k) || ''; } catch (_) { return ''; } };
 const ssSet = (k, v, keep) => { try { sessionStorage.setItem(k, v); if (keep) localStorage.setItem(k, v); } catch (_) {} };
 const ssDel = k => { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch (_) {} };
@@ -1217,7 +1217,7 @@ function entryMarkdown(x) {
   vs.forEach((v, i) => {
     if (multi) out.push(`## ${ROMAN(i + 1)}. ${v.form.trim()}`, ''); else if (v.form.trim()) out.push(v.form.trim(), '');
     paras(v.notes).forEach(p => out.push(p, ''));
-    const ps = parsePids(v.pids).filter(p => PID[p]);
+    const ps = parsePids(v.pids).filter(pidKnown);
     if (ps.length) { out.push(`Полных примеров для этого варианта: ${ps.length}.`, ''); ps.forEach(p => out.push(`### Пример ${p}`, '', `![[Примеры/${p}]]`, '')); }
     else out.push('Полный пример с дословным разбором отсутствует.', '');
     const rs = parseRefs(v.refs);
@@ -1231,14 +1231,47 @@ function entryPreview(x) {
     n: x.n, title: x.title.trim() || 'Без названия', kind: x.kind, swadesh: x.sw, meaning: wikiMark(x.meaning.trim()), notes: paras(x.notes).map(wikiMark),
     overview: multi ? vs.map((v, i) => ({ label: ROMAN(i + 1), form: v.form.trim(), note: wikiMark(v.ov.trim()), anchor: false })) : [],
     variants: vs.map((v, i) => ({ label: multi ? ROMAN(i + 1) : '', form: v.form.trim(), notes: paras(v.notes).map(wikiMark), full: null, status: '',
-      examples: parsePids(v.pids).filter(p => PID[p]).map((p, k) => ({ ...PID[p].ex, k: k + 1 })), refs: parseRefs(v.refs) })),
+      examples: parsePids(v.pids).filter(pidKnown).map((p, k) => ({ ...exFor(p), k: k + 1 })), refs: parseRefs(v.refs) })),
     linked: [], extra_refs: [], letter: ''
   };
   return entryHtml(e, true);
 }
 const adField = (id, label, val, attrs = '') => `<label class="adf"><span class="label">${label}</span><input id="${id}" value="${esc(val)}" ${attrs}></label>`;
 const adArea = (id, label, val, rows = 3, hint = '') => `<label class="adf"><span class="label">${label}</span><textarea id="${id}" rows="${rows}">${esc(val)}</textarea>${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
-const pidHint = v => { const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; const bad = ps.filter(p => !PID[p]); return `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}`; };
+const pidHint = v => {
+  const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».';
+  const site = ps.filter(p => PID[p]), vault = ps.filter(p => !PID[p] && AD.vaultP.has(p)), bad = ps.filter(p => !pidKnown(p)), ok = site.length + vault.length;
+  return `${ok} ${plural(ok, 'пример', 'примера', 'примеров')}${vault.length ? ` · ещё не на сайте, но есть в хранилище: ${vault.join(', ')} (появятся после обновления)` : ''}${bad.length ? ` · нет ни на сайте, ни в хранилище, не войдут в статью: ${bad.join(', ')}` : ''}`;
+};
+// примеры, которые уже лежат в хранилище, но ещё не попали на сайт
+const pidKnown = p => !!PID[p] || AD.vaultP.has(p);
+function parseExMd(pid, text) {
+  const x = { pid, dendi: '', source: '', source_url: '', pub: '', lit: '', parse: '', note: '' };
+  const strip = t => t.replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, '$1').replace(/\[\[([^\]]+)\]\]/g, (m, a) => a.split('/').pop());
+  text.split('\n').map(l => l.trim()).forEach(l => {
+    let m;
+    if ((m = l.match(/^\[Источник:\s*(.+?)\]\((https?:[^)]+)\)$/))) { x.source = m[1]; x.source_url = m[2]; return; }
+    if ((m = l.match(/^\[([^\]]*параллельный текст[^\]]*)\]\((https?:[^)]+)\)$/))) { x.pub_label = m[1]; x.pub_url = m[2]; x.rst = /Синодальн|\bRST\b/.test(m[1]); return; }
+    if ((m = l.match(/^Опубликованный русский перевод(?:\s*\(([^)]*)\)|\s+—\s+(.+?))?:\s+(.+)$/))) { const q = (m[1] || m[2] || '').trim(); x.pub = strip(m[3]); if (/^Синодальн/.test(q)) x.rst = true; x.pub_q = q.replace(/^Синодальн[а-яё]*,?\s*/, ''); return; }
+    for (const [pre, k] of [['Денди: ', 'dendi'], ['Источник: ', 'source'], ['Авторский дословный перевод: ', 'lit'], ['Разбор по словам: ', 'parse'], ['Примечание: ', 'note']])
+      if (l.startsWith(pre) && !x[k]) { x[k] = k === 'note' ? wikiMark(l.slice(pre.length)) : strip(l.slice(pre.length)); return; }
+  });
+  return x;
+}
+const exFor = p => PID[p] ? PID[p].ex : AD.exCache[p] || (adFetchEx(p), { pid: p, dendi: 'Загружаю пример из хранилища…', source: '', lit: '', parse: '' });
+async function adFetchEx(p) {
+  if (AD.exLoading.has(p)) return; AD.exLoading.add(p);
+  const f = await adGet(`Примеры/${p}.md`);
+  AD.exCache[p] = f ? parseExMd(p, f.text) : { pid: p, dendi: 'Не удалось загрузить пример из хранилища.', source: '', lit: '', parse: '' };
+  const prev = document.getElementById('ad-prev'); if (prev && AD.tab === 'entry') prev.innerHTML = entryPreview(ENT);
+}
+async function adLoadVaultP() {
+  const r = await gh('/contents/' + encPath('Примеры') + '?ref=' + encodeURIComponent(AD.branch));
+  if (!r.ok || !Array.isArray(r.j)) return;
+  AD.vaultP = new Set(r.j.map(f => (f.name.match(/^(П\d+)\.md$/) || [])[1]).filter(Boolean));
+  AD.nextP = Math.max(0, ...[...AD.vaultP].map(p => +p.slice(1)), ...PIDS.map(p => +p.slice(1))) + 1;
+  if (location.hash === '#admin' && AD.tab === 'entry') adRender();
+}
 function adEntryForm() {
   const x = ENT;
   return `<div class="adgrid">
@@ -1287,7 +1320,7 @@ function exMarkdown(x) {
 }
 function exPreview(x) {
   const q = x.pubQ.trim(), rst = /^Синодальн/.test(q) || /Синодальн|\bRST\b/.test(x.parLabel);
-  const ex = { pid: 'П' + exNum(), dendi: x.dendi.trim() || '…', source: x.src.trim(), source_url: x.srcUrl.trim(), pub: x.pub.trim(), pub_q: q.replace(/^Синодальн\w*,?\s*/, ''), rst,
+  const ex = { pid: 'П' + exNum(), dendi: x.dendi.trim() || '…', source: x.src.trim(), source_url: x.srcUrl.trim(), pub: x.pub.trim(), pub_q: q.replace(/^Синодальн[а-яё]*,?\s*/, ''), rst,
     pub_label: x.parLabel.trim() || 'Русский параллельный текст', pub_url: x.parUrl.trim(), lit: x.lit.trim() || '…', parse: exParse(x, false), note: wikiMark(x.note.trim()) };
   return exCard(ex, null);
 }
@@ -1406,7 +1439,7 @@ async function edSave() {
 // ---- общий доступ к GitHub ----
 const adRender = () => {
   const h = location.hash;
-  if (h === '#admin') { V.innerHTML = vAdmin(); drawSrcChips(); if (AD.ok && AD.tab === 'drafts' && !AD.drafts) adLoadDrafts(); if (AD.ok && AD.tab === 'example' && !AD.nextP) adNextP(); }
+  if (h === '#admin') { V.innerHTML = vAdmin(); drawSrcChips(); if (AD.ok && AD.tab === 'drafts' && !AD.drafts) adLoadDrafts(); if (AD.ok && AD.tab === 'example' && !AD.nextP) adLoadVaultP().then(() => { const el = document.getElementById('ad-x-num'); if (el && !EX.num && AD.nextP) { el.value = AD.nextP; refreshEx(); } }); }
   else if (/^#edit-\d+$/.test(h)) { V.innerHTML = vEdit(+h.slice(6)); drawSrcChips(); }
 };
 const adMsg = t => { AD.msg = t; const el = document.getElementById('ad-msg') || document.getElementById('ad-err'); if (el) el.textContent = t; };
@@ -1428,6 +1461,7 @@ async function adCheck() {
       AD.ok = true; AD.branch = r.j.default_branch || 'main'; AD.msg = '';
       const u = await fetch('https://api.github.com/user', { headers: { Authorization: 'Bearer ' + AD.token } }).then(x => x.ok ? x.json() : null).catch(() => null);
       AD.user = u && u.login || '';
+      adLoadVaultP();
     }
   } catch (err) { AD.ok = false; AD.msg = 'Не удалось связаться с GitHub. Проверьте интернет и попробуйте ещё раз.'; }
   adNav(); adRender();
@@ -1466,12 +1500,13 @@ async function adSaveEntry() {
 async function adSaveEx() {
   const miss = exMissing(EX); if (miss.length) return adMsg('Заполните: ' + miss.join(', ') + '.');
   const n = exNum(), path = `Примеры/П${n}.md`;
-  if (PID['П' + n]) return adMsg(`Номер П${n} уже занят. Укажите другой номер.`);
+  if (pidKnown('П' + n)) return adMsg(`Номер П${n} уже занят. Укажите другой номер.`);
   try {
     adMsg('Сохраняю…');
     if (await adSha(path)) return adMsg(`В хранилище уже есть П${n}. Укажите другой номер.`);
     await adPut(path, exMarkdown(EX), '', 'Новый пример');
     adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
+    AD.vaultP.add('П' + n); delete AD.exCache['П' + n];
     EX = blankEx(); AD.nextP = (+n) + 1; saveLocal(); adRender(); adMsg(`Сохранено: ${path}. Чтобы пример появился на сайте, укажите П${n} в статье.`);
   } catch (err) { adMsg(err.message); }
 }
@@ -1575,7 +1610,8 @@ document.addEventListener('click', ev => {
     if (t.closest('#ad-ed-ins')) {
       const d = (document.getElementById('ad-ed-pid').value.match(/\d+/) || [''])[0], ta = document.getElementById('ad-ed-text');
       if (!d) return adMsg('Введите номер примера.');
-      if (!PID['П' + d]) adMsg(`Внимание: П${d} пока нет на сайте; проверьте, что он есть в хранилище.`);
+      if (!pidKnown('П' + d)) adMsg(`Внимание: П${d} нет ни на сайте, ни в хранилище — проверьте номер.`);
+      else if (!PID['П' + d]) adMsg(`П${d} есть в хранилище и появится на сайте после обновления.`);
       const ins = `\n### Пример П${d}\n\n![[Примеры/П${d}]]\n`, a = ta.selectionStart ?? ta.value.length;
       ta.value = ta.value.slice(0, a) + ins + ta.value.slice(a); ta.focus(); ta.setSelectionRange(a + ins.length, a + ins.length); return;
     }
