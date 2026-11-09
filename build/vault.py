@@ -311,6 +311,9 @@ def build_data(vault):
                 continue
             if mode in ('refs', 'xrefs'):
                 m = MD_LINK_LINE.match(l)
+                wl = WIKI.match(plain)
+                if wl and wl[2].startswith('Источники/'):
+                    plain = WIKI.sub(lambda mm: (mm[3] or _stem(mm[2])).strip(), plain)  # [[Источники/NT18|NT18]] (…) → NT18 (…)
                 if m or REF_TEXT.match(plain):
                     r = {'t': m[1] if m else plain, 'u': m[2] if m else ''}
                     key = (r['t'], r['u'])
