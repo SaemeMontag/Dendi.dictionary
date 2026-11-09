@@ -280,6 +280,19 @@ body.wide .page { max-width: none; }
 .pfind input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .pfind p:empty { display: none; }
 .vh-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.adgrid { display: grid; gap: 24px; }
+@media (min-width: 1000px) { body.wide .adgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .adgrid > :last-child { position: sticky; top: calc(var(--barh, 110px) + 16px); max-height: calc(100vh - var(--barh, 110px) - 32px); overflow-y: auto; } }
+.adf { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.adf input, .adf textarea, .adf select, .admd { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 100%; box-sizing: border-box; }
+.adf textarea, .admd { resize: vertical; }
+.admd { font-family: var(--f-mono, monospace); font-size: .85rem; margin: 6px 0; }
+.adf input:focus, .adf textarea:focus, .adf select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.adrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.advar { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; margin: 0; min-width: 0; }
+.advar legend { font-weight: 600; padding: 0 6px; display: flex; gap: 10px; align-items: center; }
+.advar .btn2 { padding: 2px 10px; font-size: .85rem; font-weight: 400; }
+.adprev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
+.linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }

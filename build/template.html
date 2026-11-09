@@ -285,6 +285,19 @@ body.wide .page { max-width: none; }
 .pfind input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .pfind p:empty { display: none; }
 .vh-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.adgrid { display: grid; gap: 24px; }
+@media (min-width: 1000px) { body.wide .adgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .adgrid > :last-child { position: sticky; top: calc(var(--barh, 110px) + 16px); max-height: calc(100vh - var(--barh, 110px) - 32px); overflow-y: auto; } }
+.adf { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.adf input, .adf textarea, .adf select, .admd { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 100%; box-sizing: border-box; }
+.adf textarea, .admd { resize: vertical; }
+.admd { font-family: var(--f-mono, monospace); font-size: .85rem; margin: 6px 0; }
+.adf input:focus, .adf textarea:focus, .adf select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.adrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.advar { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; margin: 0; min-width: 0; }
+.advar legend { font-weight: 600; padding: 0 6px; display: flex; gap: 10px; align-items: center; }
+.advar .btn2 { padding: 2px 10px; font-size: .85rem; font-weight: 400; }
+.adprev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
+.linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
 .btn2 { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .btn2:hover { border-color: var(--accent); }
 .pbtns { display: flex; gap: 8px; }
@@ -537,9 +550,9 @@ function exCard(x, here, num) {
 }
 const refList = refs => `<ul class="refs">${refs.map(r => `<li>${extLink(r.t, r.u)}</li>`).join('')}</ul>`;
 
-function vWord(n) {
-  const e = byN[n]; if (!e) return vHome();
-  const idx = E.indexOf(e), prev = E[idx - 1], next = E[idx + 1];
+function vWord(n) { const e = byN[n]; return e ? entryHtml(e, false) : vHome(); }
+function entryHtml(e, preview) {
+  const idx = E.indexOf(e), prev = preview ? null : E[idx - 1], next = preview ? null : E[idx + 1];
   const nEx = new Set(examplesOf(e).map(x => x.pid)).size;
   const meta = `<span>№ ${e.n}</span>${e.kind === 'swadesh' ? `<span>Сводеш № ${e.swadesh}</span>` : '<span class="tag info">дополнительная лексика</span>'}`
     + (e.variants.length > 1 ? `<span>${e.variants.length} ${plural(e.variants.length, 'вариант', 'варианта', 'вариантов')}</span>` : '')
@@ -552,10 +565,10 @@ function vWord(n) {
       ${v.refs.length ? `<div class="stack" style="gap:4px"><span class="label">Источники формы и дополнительные контексты · ${v.refs.length}</span>${refList(v.refs)}</div>` : ''}
     </section>`).join('');
   const rel = new Map();
-  allForms(e).forEach(ff => (formIndex[foldDn(ff)] || []).forEach(x => { if (x.e !== e) rel.set(x.e.n, x); }));
+  if (!preview) allForms(e).forEach(ff => (formIndex[foldDn(ff)] || []).forEach(x => { if (x.e !== e) rel.set(x.e.n, x); }));
   const relHtml = rel.size ? `<section class="stack"><span class="label">То же написание в других статьях</span><div class="related">${[...rel.values()].map(x => `<span><span class="dn">${esc(x.form)}</span> → ${wordLink(x.e)}</span>`).join('')}</div></section>` : '';
   return `<article class="stack" style="gap:22px">
-    <div class="crumbs"><a href="#home">Словник</a><span>›</span><a href="#l${ALPHA.indexOf(e.letter)}">${e.letter}</a></div>
+    ${preview ? '' : `<div class="crumbs"><a href="#home">Словник</a><span>›</span><a href="#l${ALPHA.indexOf(e.letter)}">${e.letter}</a></div>`}
     <div class="entry-head"><h1>${esc(e.title)}</h1><div class="meta">${meta}</div></div>
     ${e.unestablished ? `<div class="box warn"><span class="label">Написание не установлено</span>${esc(e.unestablished)}</div>` : ''}
     ${ov}
@@ -567,7 +580,7 @@ function vWord(n) {
     ${e.extra_refs.length ? `<section class="stack" style="gap:4px"><span class="label">Дополнительные источниковые привязки</span>${refList(e.extra_refs)}</section>` : ''}
     ${relHtml}
     ${e.sci ? `<section class="stack small"><span class="label">Для сверки</span><p><span class="muted">Научный указатель.</span> ${rich(e.sci)}</p></section>` : ''}
-    <nav class="pager">${prev ? `<a href="#w${prev.n}"><small>← предыдущая</small>${esc(prev.title)}</a>` : ''}${next ? `<a class="next" href="#w${next.n}"><small>следующая →</small>${esc(next.title)}</a>` : ''}</nav>
+    ${preview ? '' : `<nav class="pager">${prev ? `<a href="#w${prev.n}"><small>← предыдущая</small>${esc(prev.title)}</a>` : ''}${next ? `<a class="next" href="#w${next.n}"><small>следующая →</small>${esc(next.title)}</a>` : ''}</nav>`}
   </article>`;
 }
 
@@ -1087,7 +1100,7 @@ if (document.addEventListener) {
     if (pk) { if (pk.dataset.sp) DN_CHOICE.set(pk.dataset.key, pk.dataset.sp); else RU_CHOICE.set(pk.dataset.key, pk.dataset.lemma); runParse(document.getElementById('ptext').value); return; }
     const cl = ev.target.closest && ev.target.closest('.pclear');
     if (cl) { const ta = document.getElementById('ptext'); ta.value = ''; runParse(''); ta.focus(); return; }
-    const d = ev.target.closest && ev.target.closest('.pdir');
+    const d = ev.target.closest && ev.target.closest('.pdir[data-dir]');
     if (d) {
       parseDir = d.dataset.dir;
       document.querySelectorAll('.pdir').forEach(x => { x.classList.toggle('on', x === d); x.setAttribute('aria-pressed', x === d); });
@@ -1099,6 +1112,240 @@ if (document.addEventListener) {
 }
 
 // маршрутизация
+// ---------- редактор: заметки и конструктор словарной статьи (только для админа хранилища) ----------
+// Доступ проверяет GitHub: личный токен владельца хранилища, право admin на репозиторий.
+// Файлы пишутся в папку «Черновики» хранилища; на сайт она не выводится (сборка её не читает).
+const GH_REPO = 'SaemeMontag/Dendi-dictionary', GH_API = 'https://api.github.com/repos/' + GH_REPO;
+const AD = { token: '', ok: false, user: '', branch: 'main', tab: 'entry', drafts: null, note: { title: '', body: '', path: '', sha: '' }, msg: '' };
+const ssGet = (k, store) => { try { return (store || sessionStorage).getItem(k) || ''; } catch (_) { return ''; } };
+const ssSet = (k, v, store) => { try { (store || sessionStorage).setItem(k, v); } catch (_) {} };
+const ssDel = k => { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch (_) {} };
+AD.token = ssGet('dn-gh') || (() => { try { return localStorage.getItem('dn-gh') || ''; } catch (_) { return ''; } })();
+const ROMAN = n => [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']].reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, '');
+const nextN = () => Math.max(0, ...E.map(e => e.n)) + 1;
+const blankVar = () => ({ form: '', ov: '', notes: '', pids: '', refs: '' });
+const blankEntry = () => ({ n: nextN(), title: '', kind: 'extra', sw: '', meaning: '', notes: '', vars: [blankVar()] });
+let ENT = blankEntry();
+try { const sv = JSON.parse(localStorage.getItem('dn-ad-entry') || 'null'); if (sv && sv.vars) ENT = sv; } catch (_) {}
+const saveLocal = () => { try { localStorage.setItem('dn-ad-entry', JSON.stringify(ENT)); } catch (_) {} };
+const gh = async (path, opt = {}) => {
+  const r = await fetch(GH_API + path, { ...opt, headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + AD.token, ...(opt.body ? { 'Content-Type': 'application/json' } : {}) } });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  return { status: r.status, ok: r.ok, j };
+};
+const b64enc = s => { const b = new TextEncoder().encode(s); let t = ''; for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(t); };
+const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const fname = s => (s || '').replace(/[\\/:*?"<>|#^\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+const encPath = p => p.split('/').map(encodeURIComponent).join('/');
+const parsePids = s => [...new Set((s.match(/\d+/g) || []).map(d => 'П' + +d))];
+const parseRefs = s => s.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+  let m = l.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/); if (m) return { t: m[1], u: m[2] };
+  m = l.match(/^(.*?)\s*\|\s*(https?:\/\/\S+)$/); if (m) return { t: m[1] || m[2], u: m[2] };
+  m = l.match(/^(https?:\/\/\S+)$/); if (m) return { t: m[1], u: m[1] };
+  return { t: l, u: '' };
+});
+const paras = s => (s || '').split(/\n\s*\n/).map(p => p.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
+
+function entryMarkdown(x) {
+  const t = x.title.trim() || 'Без названия', vs = x.vars.filter(v => v.form.trim() || v.notes.trim() || v.pids.trim() || v.refs.trim());
+  const multi = vs.length > 1, out = [`# ${x.n}. ${t}`, ''];
+  if (multi) {
+    out.push('## Варианты и значения — краткий обзор', '');
+    vs.forEach((v, i) => { const L = ROMAN(i + 1), f = v.form.trim(); out.push(`- [[Статьи/${t}#${L}. ${f}|${L}. ${f}]]${v.ov.trim() ? ' — ' + v.ov.trim() : ''}`); });
+    out.push('');
+  }
+  out.push(x.kind === 'swadesh' && x.sw ? `Сводеш № ${x.sw}` : 'Дополнительная лексика и грамматика.', '');
+  if (x.meaning.trim()) out.push(`Значение и употребление: ${x.meaning.trim().replace(/\s*\n\s*/g, ' ')}`, '');
+  paras(x.notes).forEach(p => out.push(p, ''));
+  vs.forEach((v, i) => {
+    if (multi) out.push(`## ${ROMAN(i + 1)}. ${v.form.trim()}`, ''); else if (v.form.trim()) out.push(v.form.trim(), '');
+    paras(v.notes).forEach(p => out.push(p, ''));
+    const ps = parsePids(v.pids).filter(p => PID[p]);
+    if (ps.length) { out.push(`Полных примеров для этого варианта: ${ps.length}.`, ''); ps.forEach(p => out.push(`### Пример ${p}`, '', `![[Примеры/${p}]]`, '')); }
+    else out.push('Полный пример с дословным разбором отсутствует.', '');
+    const rs = parseRefs(v.refs);
+    if (rs.length) { out.push('Источники формы и дополнительные контексты:', ''); rs.forEach(r => out.push(r.u ? `[${r.t}](${r.u})` : r.t, '')); }
+  });
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+}
+function entryPreview(x) {
+  const vs = x.vars.filter(v => v.form.trim() || v.notes.trim() || v.pids.trim() || v.refs.trim()), multi = vs.length > 1;
+  const e = {
+    n: x.n, title: x.title.trim() || 'Без названия', kind: x.kind, swadesh: x.sw, meaning: x.meaning.trim(), notes: paras(x.notes),
+    overview: multi ? vs.map((v, i) => ({ label: ROMAN(i + 1), form: v.form.trim(), note: v.ov.trim(), anchor: false })) : [],
+    variants: vs.map((v, i) => ({ label: multi ? ROMAN(i + 1) : '', form: v.form.trim(), notes: paras(v.notes), full: null, status: '',
+      examples: parsePids(v.pids).filter(p => PID[p]).map((p, k) => ({ ...PID[p].ex, k: k + 1 })), refs: parseRefs(v.refs) })),
+    linked: [], extra_refs: [], letter: ''
+  };
+  return entryHtml(e, true);
+}
+const adField = (id, label, val, attrs = '') => `<label class="adf"><span class="label">${label}</span><input id="${id}" value="${esc(val)}" ${attrs}></label>`;
+const adArea = (id, label, val, rows = 3, hint = '') => `<label class="adf"><span class="label">${label}</span><textarea id="${id}" rows="${rows}">${esc(val)}</textarea>${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
+function adEntryForm() {
+  const x = ENT;
+  return `<div class="adgrid">
+    <div class="stack" style="gap:12px">
+      <div class="adrow">${adField('ad-n', 'Номер', x.n, 'inputmode="numeric" style="max-width:7em"')}${adField('ad-title', 'Русский заголовок', x.title, 'placeholder="например, Вода"')}</div>
+      <div class="adrow"><label class="adf"><span class="label">Тип статьи</span><select id="ad-kind"><option value="extra"${x.kind === 'extra' ? ' selected' : ''}>Дополнительная лексика</option><option value="swadesh"${x.kind === 'swadesh' ? ' selected' : ''}>Список Сводеша</option></select></label>${x.kind === 'swadesh' ? adField('ad-sw', '№ по Сводешу', x.sw, 'inputmode="numeric" style="max-width:7em"') : ''}</div>
+      ${adArea('ad-meaning', 'Значение и употребление', x.meaning, 3)}
+      ${adArea('ad-notes', 'Примечания к статье', x.notes, 2, 'Абзацы разделяйте пустой строкой.')}
+      ${x.vars.map((v, i) => `<fieldset class="advar" data-i="${i}"><legend>Вариант ${x.vars.length > 1 ? ROMAN(i + 1) : ''}${x.vars.length > 1 ? ` <button type="button" class="btn2 ad-delvar" data-i="${i}">Удалить</button>` : ''}</legend>
+        ${adField('ad-v-form-' + i, 'Форма на денди', v.form, 'class="dn" spellcheck="false"')}
+        ${x.vars.length > 1 ? adField('ad-v-ov-' + i, 'Пояснение для краткого обзора', v.ov) : ''}
+        ${adArea('ad-v-notes-' + i, 'Заметки к варианту', v.notes, 2)}
+        ${adField('ad-v-pids-' + i, 'Полные примеры (номера П)', v.pids, 'placeholder="например, 12, 45, 286"')}
+        <span class="small muted">${(() => { const ps = parsePids(v.pids); if (!ps.length) return 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; const bad = ps.filter(p => !PID[p]); return `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}`; })()}</span>
+        ${adArea('ad-v-refs-' + i, 'Источники формы', v.refs, 2, 'По одному на строку: «текст | ссылка» или [текст](ссылка).')}
+      </fieldset>`).join('')}
+      <div class="adrow"><button type="button" class="btn2" id="ad-addvar">+ Вариант</button><button type="button" class="btn2" id="ad-reset">Очистить форму</button></div>
+    </div>
+    <div class="stack" style="gap:10px">
+      <span class="label">Как будет выглядеть статья</span>
+      <div class="adprev" id="ad-prev">${entryPreview(x)}</div>
+      <details><summary class="small">Текст заметки для Obsidian</summary><textarea id="ad-md" rows="12" readonly class="admd">${esc(entryMarkdown(x))}</textarea><button type="button" class="btn2" id="ad-copy">Скопировать</button></details>
+      <button type="button" class="btn" id="ad-save-entry">Сохранить в «Черновики»</button>
+    </div>
+  </div>`;
+}
+function adNoteForm() {
+  const nt = AD.note;
+  return `<div class="stack" style="gap:12px;max-width:760px">
+    ${adField('ad-nt-title', 'Название заметки', nt.title)}
+    ${adArea('ad-nt-body', 'Текст', nt.body, 14, 'Обычный текст или Markdown, как в Obsidian.')}
+    <div class="adrow"><button type="button" class="btn" id="ad-save-note">${nt.sha ? 'Сохранить изменения' : 'Сохранить в «Черновики/Заметки»'}</button>${nt.path ? `<button type="button" class="btn2" id="ad-new-note">Новая заметка</button><span class="small muted">${esc(nt.path)}</span>` : ''}</div>
+  </div>`;
+}
+function adDrafts() {
+  if (!AD.drafts) return '<p class="small muted">Загружаю список…</p>';
+  if (!AD.drafts.length) return '<p class="small muted">В папке «Черновики» пока пусто.</p>';
+  return `<ul class="res">${AD.drafts.map(f => `<li><span class="rt">${esc(f.path.replace(/^Черновики\//, ''))}</span><span class="rx"><button type="button" class="btn2 ad-open" data-p="${esc(f.path)}">Редактировать как текст</button> <a href="${esc(f.html_url)}" target="_blank" rel="noopener">на GitHub</a></span></li>`).join('')}</ul>`;
+}
+function vAdmin() {
+  if (!AD.ok) return `<div class="stack" style="gap:16px;max-width:640px">
+    <h1>Редактор</h1>
+    <p>Раздел для заметок и черновиков статей. Он работает только у владельца хранилища: GitHub проверяет, что ключ принадлежит администратору репозитория <b>${GH_REPO}</b>. Черновики сохраняются в папку «Черновики» хранилища и на сайт не выводятся.</p>
+    <form id="ad-login" class="stack" style="gap:8px"><label class="adf"><span class="label">Личный ключ GitHub (fine-grained token)</span><input id="ad-tok" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <label class="chk"><input type="checkbox" id="ad-rem"> <span>Запомнить на этом устройстве</span></label>
+      <div class="adrow"><button type="submit" class="btn">Войти</button></div>
+      <p class="small" id="ad-err" aria-live="polite">${esc(AD.msg)}</p></form>
+    <details class="box"><summary><b>Как получить ключ</b></summary><ol class="mdl" style="margin-top:8px">
+      <li>GitHub → аватар → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
+      <li>Repository access: <b>Only select repositories</b> → <b>Dendi-dictionary</b>.</li>
+      <li>Permissions → Repository permissions → <b>Contents: Read and write</b> (Metadata: Read-only добавится сам).</li>
+      <li>Срок действия — по желанию; скопируйте ключ и вставьте его сюда. Никому его не пересылайте.</li></ol>
+      <p class="small muted">Ключ хранится только в этом браузере и отправляется только на api.github.com.</p></details>
+  </div>`;
+  const tab = (k, l) => `<button type="button" class="pdir${AD.tab === k ? ' on' : ''}" data-adtab="${k}" aria-pressed="${AD.tab === k}">${l}</button>`;
+  return `<div class="stack" style="gap:16px">
+    <div class="adrow" style="justify-content:space-between"><h1>Редактор</h1><span class="small muted">${esc(AD.user)} · <button type="button" class="linklike" id="ad-logout">Выйти</button></span></div>
+    <div class="pdirs" role="group" aria-label="Режим">${tab('entry', 'Словарная статья')}${tab('note', 'Заметка')}${tab('drafts', 'Черновики')}</div>
+    <p class="small" id="ad-msg" aria-live="polite">${esc(AD.msg)}</p>
+    <div id="ad-body">${AD.tab === 'entry' ? adEntryForm() : AD.tab === 'note' ? adNoteForm() : adDrafts()}</div>
+  </div>`;
+}
+const adRender = () => { if (location.hash === '#admin') { V.innerHTML = vAdmin(); if (AD.ok && AD.tab === 'drafts' && !AD.drafts) adLoadDrafts(); } };
+const adMsg = t => { AD.msg = t; const el = document.getElementById('ad-msg') || document.getElementById('ad-err'); if (el) el.textContent = t; };
+async function adCheck() {
+  if (!AD.token) return;
+  adMsg('Проверяю доступ…');
+  try {
+    const r = await gh('');
+    if (r.status === 401) { AD.ok = false; adMsg('GitHub не принял ключ: он неверный или истёк.'); ssDel('dn-gh'); AD.token = ''; return adRender(); }
+    if (!r.ok) { AD.ok = false; adMsg('Нет доступа к хранилищу с этим ключом (GitHub ответил ' + r.status + '). Проверьте, что в ключе выбран репозиторий Dendi-dictionary.'); return adRender(); }
+    if (!(r.j.permissions && r.j.permissions.admin)) { AD.ok = false; adMsg('Ключ работает, но у его владельца нет прав администратора репозитория.'); return adRender(); }
+    AD.ok = true; AD.branch = r.j.default_branch || 'main';
+    const u = await fetch('https://api.github.com/user', { headers: { Authorization: 'Bearer ' + AD.token } }).then(x => x.ok ? x.json() : null).catch(() => null);
+    AD.user = u && u.login || ''; AD.msg = ''; adRender();
+  } catch (err) { AD.ok = false; adMsg('Не удалось связаться с GitHub. Проверьте интернет и попробуйте ещё раз.'); adRender(); }
+}
+async function adPut(path, text, sha, what) {
+  const r = await gh('/contents/' + encPath(path), { method: 'PUT', body: JSON.stringify({ message: `${what}: ${path.replace(/^Черновики\//, '')}`, content: b64enc(text), branch: AD.branch, ...(sha ? { sha } : {}) }) });
+  if (r.ok) return r.j.content.sha;
+  if (r.status === 403 || r.status === 404) throw new Error('GitHub не дал записать файл. У ключа должно быть разрешение Contents: Read and write.');
+  if (r.status === 409 || r.status === 422) throw new Error('Файл изменился на GitHub после открытия. Откройте его заново из «Черновиков».');
+  throw new Error('GitHub ответил ' + r.status + (r.j && r.j.message ? ': ' + r.j.message : ''));
+}
+async function adSha(path) { const r = await gh('/contents/' + encPath(path) + '?ref=' + encodeURIComponent(AD.branch)); return r.ok ? r.j.sha : ''; }
+async function adSaveEntry() {
+  if (!ENT.title.trim()) return adMsg('Укажите русский заголовок статьи.');
+  const path = `Черновики/${fname(ENT.title)}.md`;
+  try {
+    adMsg('Сохраняю…');
+    const sha = await adSha(path);
+    if (sha && !confirm(`Черновик «${path.slice(10)}» уже есть. Заменить его?`)) return adMsg('');
+    await adPut(path, entryMarkdown(ENT), sha, 'Черновик статьи');
+    AD.drafts = null; adMsg(`Сохранено: ${path}. Файл появится в Obsidian после синхронизации хранилища.`);
+  } catch (err) { adMsg(err.message); }
+}
+async function adSaveNote() {
+  const nt = AD.note; if (!nt.title.trim()) return adMsg('Укажите название заметки.');
+  const path = nt.path || `Черновики/Заметки/${fname(nt.title)}.md`;
+  try {
+    adMsg('Сохраняю…');
+    let sha = nt.sha;
+    if (!sha) { sha = await adSha(path); if (sha && !confirm(`Заметка «${path.slice(10)}» уже есть. Заменить её?`)) return adMsg(''); }
+    nt.sha = await adPut(path, nt.body.endsWith('\n') ? nt.body : nt.body + '\n', sha, 'Заметка'); nt.path = path;
+    AD.drafts = null; adMsg(`Сохранено: ${path}.`); adRender();
+  } catch (err) { adMsg(err.message); }
+}
+async function adLoadDrafts() {
+  const list = [];
+  const walk = async p => { const r = await gh('/contents/' + encPath(p) + '?ref=' + encodeURIComponent(AD.branch)); if (!r.ok || !Array.isArray(r.j)) return; for (const f of r.j) { if (f.type === 'dir') await walk(f.path); else if (/\.md$/i.test(f.name)) list.push(f); } };
+  try { await walk('Черновики'); AD.drafts = list.sort((a, b) => a.path.localeCompare(b.path, 'ru')); } catch (_) { AD.drafts = []; adMsg('Не удалось получить список черновиков.'); }
+  if (AD.tab === 'drafts') adRender();
+}
+async function adOpen(path) {
+  const r = await gh('/contents/' + encPath(path) + '?ref=' + encodeURIComponent(AD.branch));
+  if (!r.ok) return adMsg('Не удалось открыть файл (' + r.status + ').');
+  AD.note = { title: path.replace(/^.*\//, '').replace(/\.md$/i, ''), body: b64dec(r.j.content), path, sha: r.j.sha };
+  AD.tab = 'note'; AD.msg = ''; adRender();
+}
+document.addEventListener('submit', ev => {
+  if (ev.target.id !== 'ad-login') return;
+  ev.preventDefault();
+  AD.token = document.getElementById('ad-tok').value.trim(); if (!AD.token) return adMsg('Вставьте ключ.');
+  ssSet('dn-gh', AD.token);
+  if (document.getElementById('ad-rem').checked) { try { localStorage.setItem('dn-gh', AD.token); } catch (_) {} }
+  adCheck();
+});
+const adSync = () => {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (AD.tab === 'entry') {
+    const n = g('ad-n'); if (n !== null) ENT.n = parseInt(n, 10) || ENT.n;
+    ['title', 'meaning', 'notes'].forEach(k => { const v = g('ad-' + k); if (v !== null) ENT[k] = v; });
+    const kd = g('ad-kind'); if (kd !== null) ENT.kind = kd; const sw = g('ad-sw'); if (sw !== null) ENT.sw = sw;
+    ENT.vars.forEach((v, i) => ['form', 'ov', 'notes', 'pids', 'refs'].forEach(k => { const val = g(`ad-v-${k}-${i}`); if (val !== null) v[k] = val; }));
+    saveLocal();
+  } else if (AD.tab === 'note') { const t = g('ad-nt-title'), b = g('ad-nt-body'); if (t !== null) AD.note.title = t; if (b !== null) AD.note.body = b; }
+};
+let adT;
+document.addEventListener('input', ev => {
+  if (!ev.target.id || !ev.target.id.startsWith('ad-') || ev.target.id === 'ad-tok') return;
+  adSync();
+  if (AD.tab !== 'entry') return;
+  clearTimeout(adT);
+  adT = setTimeout(() => {
+    const p = document.getElementById('ad-prev'), md = document.getElementById('ad-md');
+    if (p) p.innerHTML = entryPreview(ENT); if (md) md.value = entryMarkdown(ENT);
+    ENT.vars.forEach((v, i) => { const el = document.getElementById('ad-v-pids-' + i); if (el && el.closest('label').nextElementSibling) { const ps = parsePids(v.pids), bad = ps.filter(q => !PID[q]); el.closest('label').nextElementSibling.textContent = ps.length ? `${ps.length - bad.length} ${plural(ps.length - bad.length, 'пример', 'примера', 'примеров')}${bad.length ? ` · нет в словаре и не войдут в статью: ${bad.join(', ')}` : ''}` : 'Без примеров будет пометка «Полный пример с дословным разбором отсутствует».'; } });
+  }, 200);
+});
+document.addEventListener('change', ev => { if (ev.target.id === 'ad-kind') { adSync(); adRender(); } });
+document.addEventListener('click', ev => {
+  const t = ev.target; if (!t.closest || location.hash !== '#admin') return;
+  const tb = t.closest('[data-adtab]'); if (tb) { adSync(); AD.tab = tb.dataset.adtab; AD.msg = ''; adRender(); return; }
+  if (t.closest('#ad-logout')) { ssDel('dn-gh'); AD.token = ''; AD.ok = false; AD.msg = ''; adRender(); return; }
+  if (t.closest('#ad-addvar')) { adSync(); ENT.vars.push(blankVar()); saveLocal(); adRender(); return; }
+  const dv = t.closest('.ad-delvar'); if (dv) { adSync(); ENT.vars.splice(+dv.dataset.i, 1); saveLocal(); adRender(); return; }
+  if (t.closest('#ad-reset')) { if (confirm('Очистить форму статьи?')) { ENT = blankEntry(); saveLocal(); adRender(); } return; }
+  if (t.closest('#ad-copy')) { const md = document.getElementById('ad-md'); md.select(); try { navigator.clipboard.writeText(md.value); } catch (_) { document.execCommand('copy'); } adMsg('Текст скопирован.'); return; }
+  if (t.closest('#ad-save-entry')) { adSync(); adSaveEntry(); return; }
+  if (t.closest('#ad-save-note')) { adSync(); adSaveNote(); return; }
+  if (t.closest('#ad-new-note')) { AD.note = { title: '', body: '', path: '', sha: '' }; AD.msg = ''; adRender(); return; }
+  const op = t.closest('.ad-open'); if (op) { adOpen(op.dataset.p); return; }
+});
+
+// маршруты
 const PAGES = { parse: ['Перевод фразы', vParse], dendi: ['Денди → русский', vDendi], examples: ['Примеры', vExamples], grammar: ['Грамматика', vGrammar], sources: ['Источники', vSources], about: ['Как пользоваться', vAbout], contacts: ['Контакты', vContacts] };
 function route() {
   const h = location.hash.slice(1) || 'home';
@@ -1116,10 +1363,11 @@ function route() {
   else if ((m = h.match(/^gr-(g\d+)$/))) { html = vGrammar(); nav = 'grammar'; scrollTo = h; title = 'Грамматика · Словарь денди'; }
   else if ((m = h.match(/^src(\d+|rst)$/))) { html = vSources(h); nav = 'sources'; scrollTo = h; }
   else if (h === 'search') { html = vSearch(); }
+  else if (h === 'admin') { html = vAdmin(); title = 'Редактор · Словарь денди'; if (!AD.ok && AD.token) setTimeout(adCheck, 0); }
   else if (PAGES[h]) { html = PAGES[h][1](); nav = h; title = PAGES[h][0] + ' · Словарь денди'; }
   else { html = vHome(); nav = 'home'; }
   V.innerHTML = html;
-  document.body.classList.toggle('wide', nav === 'grammar');
+  document.body.classList.toggle('wide', nav === 'grammar' || h === 'admin');
   document.title = title;
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === nav));
   drawAbc(L);
